@@ -1,0 +1,24 @@
+{
+  "name": "square",
+  "display_name": "Square patch",
+  "raw_file": "data0\u0646\u0646\u0646..txt",
+  "param_label": "wm",
+  "ranges": {
+    "fmin": 4.0,
+    "fmax": 50.0,
+    "pmin": 1.0,
+    "pmax": 13.0,
+    "s11_min": -42.581012,
+    "s11_max": 1.9286549e-15
+  },
+  "forward_metrics": {
+    "val_mae": 0.06805252283811569,
+    "val_rmse": 0.2539916932582855,
+    "best_val_loss_scaled": 0.01486234244432568
+  },
+  "inverse_metrics": {
+    "val_mae": 1.36690354347229,
+    "val_rmse": 2.1144251823425293,
+    "best_val_loss_scaled": 0.15038915044365667
+  }
+}

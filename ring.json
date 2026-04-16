@@ -1,0 +1,24 @@
+{
+  "name": "ring",
+  "display_name": "Ring patch (h variable)",
+  "raw_file": "circle_1mm.txt",
+  "param_label": "h",
+  "ranges": {
+    "fmin": 4.0,
+    "fmax": 50.0,
+    "pmin": 1.0,
+    "pmax": 10.0,
+    "s11_min": -11.894252,
+    "s11_max": 1.9286549e-15
+  },
+  "forward_metrics": {
+    "val_mae": 0.02076633833348751,
+    "val_rmse": 0.052021369338035583,
+    "best_val_loss_scaled": 0.0005209744754049656
+  },
+  "inverse_metrics": {
+    "val_mae": 0.8700936436653137,
+    "val_rmse": 1.36070716381073,
+    "best_val_loss_scaled": 0.11320930306686092
+  }
+}

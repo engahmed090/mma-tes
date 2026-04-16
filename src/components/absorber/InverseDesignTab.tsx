@@ -36,7 +36,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
     ]);
     setAiOutputs([]);
 
-    const cands = await runWithStages(() => {
+    const cands = await runWithStages(async () => {
       const results: { item: LoadedShape; p: number; s11_db: number; err: number }[] = [];
       
       for (const item of shapes) {
@@ -44,17 +44,38 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
         const { fmin, fmax } = item.ranges;
         if (invF < fmin - 0.05 || invF > fmax + 0.05) continue;
         
-        let bestP = 0, bestErr = Infinity, bestS11 = NaN;
-        for (const pk of Object.keys(item.curves)) {
-          const p = parseFloat(pk);
-          const { freqs, s11 } = item.curves[p];
-          const s = interpS11At(invF, freqs, s11);
-          if (!isFinite(s)) continue;
-          const err = Math.abs(s - invS11);
-          if (err < bestErr) { bestErr = err; bestP = p; bestS11 = s; }
-        }
-        if (isFinite(bestS11)) {
-          results.push({ item, p: bestP, s11_db: bestS11, err: bestErr });
+        try {
+          // 1. Inverse Generation
+          const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/predict/inverse`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ target_f: invF, target_s11: invS11, shape_type: item.name })
+          });
+          if (!res.ok) continue;
+          const data = await res.json();
+          
+          // 2. Forward Validation
+          const fwdRes = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/predict/forward`, {
+              method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ shape_type: item.name, p_value: data.p_optimal })
+          });
+          if (!fwdRes.ok) continue;
+          const fwdData = await fwdRes.json();
+          
+          // Inject new curve natively so the chart visualizes it perfectly
+          item.curves = {
+             [data.p_optimal]: { freqs: fwdData.freqs, s11: fwdData.s11 }
+          };
+          
+          results.push({ 
+             item, 
+             p: data.p_optimal, 
+             s11_db: data.s11_expected, 
+             err: Math.abs(data.s11_expected - invS11) 
+          });
+        } catch(e) {
+          console.error(`Error processing generative pipeline for ${item.name}:`, e);
         }
       }
       

@@ -15,60 +15,42 @@ export function useShapeData(includePaper: boolean = true) {
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
-      const loaded: LoadedShape[] = [];
-      const errs: string[] = [];
-      
-      for (const cfg of SHAPES) {
-        try {
-          const resp = await fetch(`/data/${cfg.rawFile}`);
-          if (!resp.ok) { errs.push(`Failed to load ${cfg.rawFile}`); continue; }
-          const text = await resp.text();
-          const rows = loadCstTxtGeneric(text, cfg.paramMode, cfg.fixedCurve, cfg.fixedPValue ?? 0);
-          if (rows.length === 0) { errs.push(`${cfg.rawFile}: no data parsed`); continue; }
-          const curves = buildParamCurves(rows);
-          const pKeys = Object.keys(curves).map(Number).sort((a, b) => a - b);
-          const allFreqs = Object.values(curves).flatMap(c => c.freqs);
-          const fmin = Math.min(...allFreqs);
-          const fmax = Math.max(...allFreqs);
-          const pmin = pKeys.length > 0 ? pKeys[0] : 0;
-          const pmax = pKeys.length > 0 ? pKeys[pKeys.length - 1] : 0;
-          
-          loaded.push({
-            name: cfg.name,
-            displayName: cfg.displayName,
-            geometryType: cfg.geometryType,
-            paramMode: cfg.paramMode,
-            paramLabel: cfg.paramLabel,
-            fixedCurve: cfg.fixedCurve,
-            fixedPValue: cfg.fixedPValue,
-            fixed: cfg.fixed,
-            curves,
-            ranges: { fmin, fmax, pmin, pmax },
-            isReal: true,
-            rawFile: cfg.rawFile,
-            config: cfg,
-          });
-        } catch (e: any) {
-          errs.push(`${cfg.rawFile}: ${e.message}`);
-        }
-      }
-      
-      if (cancelled) return;
-      
-      if (includePaper) {
-        const paperShapes = makeSyntheticPaperShapes();
-        for (const ps of paperShapes) {
-          loaded.push({ ...ps, config: { name: ps.name, rawFile: '', paramMode: ps.paramMode, paramLabel: ps.paramLabel, fixedCurve: ps.fixedCurve, geometryType: ps.geometryType, displayName: ps.displayName, fixed: ps.fixed } });
-        }
-      }
-      
-      setShapes(loaded);
-      setErrors(errs);
-      setLoading(false);
+    
+    // Bypass dummy CST loading to let the UI load instantly
+    setLoading(true);
+    const loaded: LoadedShape[] = [];
+    
+    for (const cfg of SHAPES) {
+      loaded.push({
+        name: cfg.name,
+        displayName: cfg.displayName,
+        geometryType: cfg.geometryType,
+        paramMode: cfg.paramMode,
+        paramLabel: cfg.paramLabel,
+        fixedCurve: cfg.fixedCurve,
+        fixedPValue: cfg.fixedPValue || 0,
+        fixed: cfg.fixed,
+        curves: {}, // Let the UI be 100% powered by the python backend
+        ranges: { fmin: 1, fmax: 30, pmin: 0, pmax: 20 },
+        isReal: true,
+        rawFile: cfg.rawFile,
+        config: cfg,
+      });
     }
-    load();
+    
+    if (includePaper) {
+      const paperShapes = makeSyntheticPaperShapes();
+      for (const ps of paperShapes) {
+        loaded.push({ ...ps, config: { name: ps.name, rawFile: '', paramMode: ps.paramMode, paramLabel: ps.paramLabel, fixedCurve: ps.fixedCurve, geometryType: ps.geometryType, displayName: ps.displayName, fixed: ps.fixed } });
+      }
+    }
+    
+    if (!cancelled) {
+        setShapes(loaded);
+        setErrors([]);
+        setLoading(false);
+    }
+    
     return () => { cancelled = true; };
   }, [includePaper]);
 
