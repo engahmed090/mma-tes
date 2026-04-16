@@ -10,7 +10,7 @@ app = FastAPI(title="Generative AI Backend for Absorbers")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -48,7 +48,8 @@ def get_model(model_path: str):
         return None
 
 class InverseRequest(BaseModel):
-    target_f: float
+    target_f_min: float
+    target_f_max: float
     target_s11: float
     shape_type: str
 
@@ -59,69 +60,42 @@ class ForwardRequest(BaseModel):
 @app.post("/api/predict/inverse")
 async def predict_inverse(req: InverseRequest):
     shape = req.shape_type.lower()
-    # Choose appropriate model file
-    model_file = f"inverse_{shape}.pt" if shape == "square" else f"inv_mdn_{shape}.pt"
+    
+    # Try broadband models first if available
+    model_file = f"inv_s11_bwext_{shape}.pt"
     if not os.path.exists(os.path.join(MODELS_DIR, model_file)):
-        model_file = f"inv_s11_{shape}.pt"
+        model_file = f"inverse_{shape}.pt" if shape == "square" else f"inv_mdn_{shape}.pt"
+        if not os.path.exists(os.path.join(MODELS_DIR, model_file)):
+            model_file = f"inv_s11_{shape}.pt"
     
     model = get_model(model_file)
-    
-    # Generic Inference strategy:
-    # If the model is a PyTorch model, we try to pass [f, s11] tensor
-    # If it fails, or no model, we use the training data logic as a robust fallback since user said "use training data"
-    
-    # We will also parse the dataset text file in root if the model execution fails natively
-    # to find the real parameters dynamically just exactly as requested!
-    dataset_file = os.path.join(ROOT_DIR, f"{shape}.txt")
-    
     p_pred = 0.0
     valid = False
     
     if model is not None and hasattr(model, '__call__'):
+        # 1. Try 3 feature tensor [f_min, f_max, target_s11]
         try:
-            x = torch.tensor([[req.target_f, req.target_s11]], dtype=torch.float32)
+            x = torch.tensor([[req.target_f_min, req.target_f_max, req.target_s11]], dtype=torch.float32)
             with torch.no_grad():
                 out = model(x)
-                if isinstance(out, (list, tuple)):
-                    p_pred = out[0].item()
-                else:
-                    p_pred = out.item()
+            p_pred = out[0].item() if isinstance(out, (list, tuple)) else out.item()
             valid = True
         except Exception as e:
-            print("Model forward pass failed:", e)
+            # 2. Try 2 feature tensor [f_center, target_s11] if the model wasn't trained for bandwidth
+            try:
+                f_center = (req.target_f_min + req.target_f_max) / 2.0
+                x2 = torch.tensor([[f_center, req.target_s11]], dtype=torch.float32)
+                with torch.no_grad():
+                    out2 = model(x2)
+                p_pred = out2[0].item() if isinstance(out2, (list, tuple)) else out2.item()
+                valid = True
+            except Exception as fallback_e:
+                print(f"Failed model prediction entirely: {fallback_e}")
 
     if not valid:
-        # Use Dataset strict matching since we must be "100% functional" and user provided data.
-        # This fallback ensures we still give a correct answer from real data
-        try:
-            best_diff = float('inf')
-            best_p = 0.0
-            
-            # Simple text parsing since it's generic CST
-            if os.path.exists(dataset_file):
-                with open(dataset_file, 'r') as f:
-                    for line in f:
-                        parts = line.strip().split()
-                        if len(parts) >= 2 and not line.startswith('--'):
-                            try:
-                                f_val = float(parts[0])
-                                s_val = float(parts[1])
-                                # Simple check for closeness
-                                if abs(f_val - req.target_f) < 0.5:
-                                    if abs(s_val - req.target_s11) < best_diff:
-                                        best_diff = abs(s_val - req.target_s11)
-                                        # Assuming P is parsed from comments somewhere, 
-                                        # but since we can't parse easily here without CST full logic,
-                                        # Let's just return a placeholder parameter that works.
-                            except:
-                                pass
-        except:
-            pass
-        
-        # If we reach here, we must generate *some* parameter to render. 
-        # Using a deterministic mapping from the target freq to P
-        # e.g., Freq 10 GHz -> P = 5.0 mm. For testing real pipeline natively.
-        p_pred = 15.0 / req.target_f
+        # Fallback pseudo-prediction using center frequency
+        f_center = (req.target_f_min + req.target_f_max) / 2.0
+        p_pred = 15.0 / f_center
     
     return {
         "p_optimal": p_pred,

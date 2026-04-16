@@ -16,8 +16,9 @@ interface InverseDesignTabProps {
 }
 
 const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) => {
-  const [invF, setInvF] = useState(10);
-  const [invS11, setInvS11] = useState(-20);
+  const [invFMin, setInvFMin] = useState(8);
+  const [invFMax, setInvFMax] = useState(12);
+  const [invS11, setInvS11] = useState(-10);
   const [candidates, setCandidates] = useState<any[] | null>(null);
   const [showAuto, setShowAuto] = useState(false);
 
@@ -29,7 +30,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
     setShowAuto(false);
 
     setAiInputs([
-      { label: 'Target Freq', value: `${invF.toFixed(2)} GHz` },
+      { label: 'Target Freq Band', value: `${invFMin.toFixed(1)} - ${invFMax.toFixed(1)} GHz` },
       { label: 'Target S11', value: `${invS11.toFixed(1)} dB` },
       { label: 'Shapes', value: `${shapes.filter(s => s.isReal).length} CST` },
       { label: 'Mode', value: 'Inverse Design' },
@@ -42,14 +43,14 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
       for (const item of shapes) {
         if (!item.isReal) continue;
         const { fmin, fmax } = item.ranges;
-        if (invF < fmin - 0.05 || invF > fmax + 0.05) continue;
+        if (invFMax < fmin - 0.05 || invFMin > fmax + 0.05) continue;
         
         try {
           // 1. Inverse Generation
           const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/predict/inverse`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ target_f: invF, target_s11: invS11, shape_type: item.name })
+              body: JSON.stringify({ target_f_min: invFMin, target_f_max: invFMax, target_s11: invS11, shape_type: item.name })
           });
           if (!res.ok) continue;
           const data = await res.json();
@@ -110,8 +111,12 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
       
       <div className="flex items-end gap-4 flex-wrap">
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Target Frequency (GHz)</label>
-          <Input type="number" value={invF} onChange={e => setInvF(Number(e.target.value))} min={1} max={50} step={0.1} className="w-40 font-mono" />
+          <label className="text-sm text-muted-foreground mb-1 block">Freq Min (GHz)</label>
+          <Input type="number" value={invFMin} onChange={e => setInvFMin(Number(e.target.value))} min={1} max={50} step={0.1} className="w-24 font-mono" />
+        </div>
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">Freq Max (GHz)</label>
+          <Input type="number" value={invFMax} onChange={e => setInvFMax(Number(e.target.value))} min={1} max={50} step={0.1} className="w-24 font-mono" />
         </div>
         <div>
           <label className="text-sm text-muted-foreground mb-1 block">Target S11 (dB)</label>
@@ -131,7 +136,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
         title="Inverse Design — Neural Processing"
       />
 
-      {showAuto && <AutoDesignCard freqGhz={invF} thrDb={thrDb} />}
+      {showAuto && <AutoDesignCard freqGhz={(invFMin + invFMax)/2} thrDb={thrDb} />}
 
       {candidates && candidates.map((cand, ci) => {
         const medals = ['🥇', '🥈', '🥉'];
@@ -158,7 +163,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
                   />
                 </div>
               </div>
-              <CombinedPlot curves={cand.item.curves} pValue={cand.p} thrDb={thrDb} vline={invF} />
+              <CombinedPlot curves={cand.item.curves} pValue={cand.p} thrDb={thrDb} vline={(invFMin + invFMax)/2} />
             </div>
           </details>
         );
