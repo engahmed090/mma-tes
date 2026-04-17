@@ -353,6 +353,23 @@ function buildCSTMacro(
   lines.push(L(`    End With`));
 
   lines.push(L(``));
+  lines.push(L(`    ' ── STEP 3b: Define Copper (annealed) material ──────────────`));
+  lines.push(L(`    With Material`));
+  lines.push(L(`        .Reset`));
+  lines.push(L(`        .Name "Copper (annealed)"`));
+  lines.push(L(`        .Folder ""`));
+  lines.push(L(`        .FrqType "all"`));
+  lines.push(L(`        .Type "Lossy metal"`));
+  lines.push(L(`        .Mue "1.0"`));
+  lines.push(L(`        .Kappa "5.8e+007"`));
+  lines.push(L(`        .Rho "8930.0"`));
+  lines.push(L(`        .ThermalType "Normal"`));
+  lines.push(L(`        .ThermalConductivity "401.0"`));
+  lines.push(L(`        .HeatCapacity "0.39"`));
+  lines.push(L(`        .Create`));
+  lines.push(L(`    End With`));
+
+  lines.push(L(``));
   lines.push(L(`    ' ── STEP 4: Build Ground Plane ───────────────────────────────`));
   lines.push(L(`    With Brick`));
   lines.push(L(`        .Reset`));
