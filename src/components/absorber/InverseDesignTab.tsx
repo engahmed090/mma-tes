@@ -5,6 +5,7 @@ import CombinedPlot from './CombinedPlot';
 import DimTable from './DimTable';
 import Absorber3D from './Absorber3D';
 import AutoDesignCard from './AutoDesignCard';
+import DeepLearningOptimizationBox from './DeepLearningOptimizationBox';
 import AIWorkingPanel, { useAIStages, AIWorkingInput } from './AIWorkingPanel';
 import { LoadedShape } from '@/hooks/useShapeData';
 import { interpS11At, nearestPKey, absorptionFromS11, aiAutoDesign } from '@/utils/math';
@@ -16,9 +17,8 @@ interface InverseDesignTabProps {
 }
 
 const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) => {
-  const [invFMin, setInvFMin] = useState(8);
-  const [invFMax, setInvFMax] = useState(12);
-  const [invS11, setInvS11] = useState(-10);
+  const [invF, setInvF] = useState(10);
+  const [invS11, setInvS11] = useState(-20);
   const [candidates, setCandidates] = useState<any[] | null>(null);
   const [showAuto, setShowAuto] = useState(false);
 
@@ -30,53 +30,32 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
     setShowAuto(false);
 
     setAiInputs([
-      { label: 'Target Freq Band', value: `${invFMin.toFixed(1)} - ${invFMax.toFixed(1)} GHz` },
+      { label: 'Target Freq', value: `${invF.toFixed(2)} GHz` },
       { label: 'Target S11', value: `${invS11.toFixed(1)} dB` },
       { label: 'Shapes', value: `${shapes.filter(s => s.isReal).length} CST` },
       { label: 'Mode', value: 'Inverse Design' },
     ]);
     setAiOutputs([]);
 
-    const cands = await runWithStages(async () => {
+    const cands = await runWithStages(() => {
       const results: { item: LoadedShape; p: number; s11_db: number; err: number }[] = [];
       
       for (const item of shapes) {
         if (!item.isReal) continue;
         const { fmin, fmax } = item.ranges;
-        if (invFMax < fmin - 0.05 || invFMin > fmax + 0.05) continue;
+        if (invF < fmin - 0.05 || invF > fmax + 0.05) continue;
         
-        try {
-          // 1. Inverse Generation
-          const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/predict/inverse`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ target_f_min: invFMin, target_f_max: invFMax, target_s11: invS11, shape_type: item.name })
-          });
-          if (!res.ok) continue;
-          const data = await res.json();
-          
-          // 2. Forward Validation
-          const fwdRes = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/predict/forward`, {
-              method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ shape_type: item.name, p_value: data.p_optimal })
-          });
-          if (!fwdRes.ok) continue;
-          const fwdData = await fwdRes.json();
-          
-          // Inject new curve natively so the chart visualizes it perfectly
-          item.curves = {
-             [data.p_optimal]: { freqs: fwdData.freqs, s11: fwdData.s11 }
-          };
-          
-          results.push({ 
-             item, 
-             p: data.p_optimal, 
-             s11_db: data.s11_expected, 
-             err: Math.abs(data.s11_expected - invS11) 
-          });
-        } catch(e) {
-          console.error(`Error processing generative pipeline for ${item.name}:`, e);
+        let bestP = 0, bestErr = Infinity, bestS11 = NaN;
+        for (const pk of Object.keys(item.curves)) {
+          const p = parseFloat(pk);
+          const { freqs, s11 } = item.curves[p];
+          const s = interpS11At(invF, freqs, s11);
+          if (!isFinite(s)) continue;
+          const err = Math.abs(s - invS11);
+          if (err < bestErr) { bestErr = err; bestP = p; bestS11 = s; }
+        }
+        if (isFinite(bestS11)) {
+          results.push({ item, p: bestP, s11_db: bestS11, err: bestErr });
         }
       }
       
@@ -111,12 +90,8 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
       
       <div className="flex items-end gap-4 flex-wrap">
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Freq Min (GHz)</label>
-          <Input type="number" value={invFMin} onChange={e => setInvFMin(Number(e.target.value))} min={1} max={50} step={0.1} className="w-24 font-mono" />
-        </div>
-        <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Freq Max (GHz)</label>
-          <Input type="number" value={invFMax} onChange={e => setInvFMax(Number(e.target.value))} min={1} max={50} step={0.1} className="w-24 font-mono" />
+          <label className="text-sm text-muted-foreground mb-1 block">Target Frequency (GHz)</label>
+          <Input type="number" value={invF} onChange={e => setInvF(Number(e.target.value))} min={1} max={50} step={0.1} className="w-40 font-mono" />
         </div>
         <div>
           <label className="text-sm text-muted-foreground mb-1 block">Target S11 (dB)</label>
@@ -136,7 +111,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
         title="Inverse Design — Neural Processing"
       />
 
-      {showAuto && <AutoDesignCard freqGhz={(invFMin + invFMax)/2} thrDb={thrDb} />}
+      {showAuto && <AutoDesignCard freqGhz={invF} thrDb={thrDb} />}
 
       {candidates && candidates.map((cand, ci) => {
         const medals = ['🥇', '🥈', '🥉'];
@@ -163,7 +138,15 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
                   />
                 </div>
               </div>
-              <CombinedPlot curves={cand.item.curves} pValue={cand.p} thrDb={thrDb} vline={(invFMin + invFMax)/2} />
+              <CombinedPlot curves={cand.item.curves} pValue={cand.p} thrDb={thrDb} vline={invF} />
+              {ci === 0 && (
+                <DeepLearningOptimizationBox
+                  currentP={cand.p}
+                  currentS11={cand.s11_db}
+                  targetFreq={invF}
+                  shapeType={cand.item.geometryType}
+                />
+              )}
             </div>
           </details>
         );

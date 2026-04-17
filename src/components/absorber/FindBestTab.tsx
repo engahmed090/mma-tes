@@ -7,6 +7,7 @@ import HeatmapPlot from './HeatmapPlot';
 import DimTable from './DimTable';
 import Absorber3D from './Absorber3D';
 import AutoDesignCard from './AutoDesignCard';
+import DeepLearningOptimizationBox from './DeepLearningOptimizationBox';
 import AIWorkingPanel, { useAIStages, AIWorkingInput } from './AIWorkingPanel';
 import { LoadedShape } from '@/hooks/useShapeData';
 import { absorptionFromS11, calcBandwidth, nearestPKey, aiAutoDesign } from '@/utils/math';
@@ -233,6 +234,14 @@ function ShapeResultCard({ result, idx, thrDb, vline, vspan }: { result: any; id
             </div>
           </div>
           <CombinedPlot curves={result.item.curves} pValue={pBest} thrDb={thrDb} vline={vline} vspan={vspan} />
+          {idx === 0 && (
+            <DeepLearningOptimizationBox
+              currentP={pBest}
+              currentS11={s11Val}
+              targetFreq={vline ?? (vspan ? (vspan[0] + vspan[1]) / 2 : 10)}
+              shapeType={result.item.geometryType}
+            />
+          )}
           {Object.keys(result.item.curves).length > 1 && (
             <HeatmapPlot curves={result.item.curves} freqTarget={vline} />
           )}
