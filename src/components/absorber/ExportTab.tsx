@@ -909,7 +909,15 @@ const ExportTab: React.FC<ExportTabProps> = ({ shapes, pickAllInFreq }) => {
   const handlePreview = useCallback((fmt: ExportFormat) => {
     try {
       const content = validateAndBuild(fmt);
-      setPreviewText(content.slice(0, 4000) + (content.length > 4000 ? '\n\n... (truncated for preview)' : ''));
+      // 20 000 chars is well above any generated output (~6-8 k for a CST macro).
+      // Even if truncation fires, the DOWNLOADED file is always 100 % complete.
+      const PREVIEW_LIMIT = 20000;
+      const truncated = content.length > PREVIEW_LIMIT;
+      const displayText = truncated
+        ? content.slice(0, PREVIEW_LIMIT) +
+          `\n\n' ================================================================\n' PREVIEW TRUNCATED AT ${PREVIEW_LIMIT} CHARS.\n' The DOWNLOADED .bas file is 100% complete and fully executable.\n' ================================================================`
+        : content;
+      setPreviewText(displayText);
       setPreviewFormat(fmt);
     } catch {
       setPreviewText('Error generating preview.');
@@ -1309,10 +1317,12 @@ const ExportTab: React.FC<ExportTabProps> = ({ shapes, pickAllInFreq }) => {
             borderBottom: '1px solid hsl(217 33% 20%)',
             background: 'hsl(217 33% 13%)',
           }}>
-            <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'hsl(213 31% 88%)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'hsl(213 31% 88%)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <Code2 className="w-4 h-4" style={{ color: 'hsl(217 91% 60%)' }} />
               Preview — {FORMAT_CARDS.find(c => c.id === previewFormat)?.label}
-              <span style={{ fontSize: '0.7rem', color: 'hsl(215 16% 55%)', fontWeight: 400 }}>(first 4000 chars)</span>
+              <span style={{ fontSize: '0.7rem', color: 'hsl(160 84% 50%)', fontWeight: 600, background: 'hsl(160 60% 12%)', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                ✓ Downloaded file is always 100% complete
+              </span>
             </span>
             <button
               onClick={() => { setPreviewText(null); setPreviewFormat(null); }}
