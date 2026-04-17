@@ -4,8 +4,8 @@ import FindBestTab from '@/components/absorber/FindBestTab';
 import InverseDesignTab from '@/components/absorber/InverseDesignTab';
 import BioSensingTab from '@/components/absorber/BioSensingTab';
 import ChatTab from '@/components/absorber/ChatTab';
-import ReportTab from '@/components/absorber/ReportTab';
-import { Search, RefreshCw, HeartPulse, Bot, FileText, Settings, Loader2 } from 'lucide-react';
+import ExportTab from '@/components/absorber/ExportTab';
+import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,7 +15,7 @@ const TABS = [
   { id: 'inverse', label: '🔄 Inverse Design', icon: RefreshCw },
   { id: 'bio', label: '🩺 Bio-Sensing', icon: HeartPulse },
   { id: 'chat', label: '🤖 AI Expert Chat', icon: Bot },
-  { id: 'report', label: '📋 Report Generator', icon: FileText },
+  { id: 'report', label: '📦 Export / Download', icon: Download },
 ];
 
 const Index = () => {
@@ -107,7 +107,7 @@ const Index = () => {
                 {activeTab === 'inverse' && <InverseDesignTab shapes={shapes} thrDb={thrDb} />}
                 {activeTab === 'bio' && <BioSensingTab />}
                 {activeTab === 'chat' && <ChatTab shapes={shapes} thrDb={thrDb} />}
-                {activeTab === 'report' && <ReportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
+                {activeTab === 'report' && <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
               </>
             )}
           </div>
