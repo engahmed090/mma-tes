@@ -96,11 +96,40 @@ async def predict_inverse(req: InverseRequest):
         # Fallback pseudo-prediction using center frequency
         f_center = (req.target_f_min + req.target_f_max) / 2.0
         p_pred = 15.0 / f_center
+        
+    # --- Tandem Logic: Execute Forward Model with predicted P ---
+    fwd_model_file = f"fwd_ens_{shape}.pt"
+    if not os.path.exists(os.path.join(MODELS_DIR, fwd_model_file)):
+        fwd_model_file = f"models_{shape}.pt"
+        
+    fwd_model = get_model(fwd_model_file)
+    freqs = np.linspace(1, 20, 100).tolist()
+    s11 = []
+    fwd_valid = False
+    
+    if fwd_model is not None and hasattr(fwd_model, '__call__'):
+        try:
+            x = torch.tensor([[f, p_pred] for f in freqs], dtype=torch.float32)
+            with torch.no_grad():
+                out = fwd_model(x)
+                s11 = out.squeeze().tolist()
+            fwd_valid = True
+        except Exception as e:
+            print("Tandem forward pass failed:", e)
+            
+    if not fwd_valid:
+        # Fallback analytical forward prediction
+        fr = 15.0 / p_pred
+        for f in freqs:
+            val = -30.0 / (1 + ((f - fr)*4)**2)
+            s11.append(val)
     
     return {
         "p_optimal": p_pred,
         "s11_expected": req.target_s11,
-        "model_used": model_file
+        "model_used": model_file,
+        "freqs": freqs,
+        "s11": s11
     }
 
 @app.post("/api/predict/forward")

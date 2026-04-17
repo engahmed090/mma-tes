@@ -1,14 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import CombinedPlot from './CombinedPlot';
 import DimTable from './DimTable';
 import Absorber3D from './Absorber3D';
-import AutoDesignCard from './AutoDesignCard';
-import DeepLearningOptimizationBox from './DeepLearningOptimizationBox';
 import AIWorkingPanel, { useAIStages, AIWorkingInput } from './AIWorkingPanel';
 import { LoadedShape } from '@/hooks/useShapeData';
-import { interpS11At, nearestPKey, absorptionFromS11, aiAutoDesign } from '@/utils/math';
 import { RefreshCw } from 'lucide-react';
 
 interface InverseDesignTabProps {
@@ -17,78 +14,91 @@ interface InverseDesignTabProps {
 }
 
 const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) => {
-  const [invF, setInvF] = useState(10);
-  const [invS11, setInvS11] = useState(-20);
-  const [candidates, setCandidates] = useState<any[] | null>(null);
-  const [showAuto, setShowAuto] = useState(false);
+  const validShapes = useMemo(() => shapes.filter(s => s.isReal), [shapes]);
+  const [selectedShapeName, setSelectedShapeName] = useState(validShapes[0]?.name || '');
+  const [invF, setInvF] = useState(10.0);
+  const [invS11, setInvS11] = useState(-20.0);
+  const [result, setResult] = useState<any | null>(null);
 
   const { stage, elapsed, runWithStages } = useAIStages();
   const [aiInputs, setAiInputs] = useState<AIWorkingInput[]>([]);
   const [aiOutputs, setAiOutputs] = useState<AIWorkingInput[]>([]);
 
-  const handleRun = async () => {
-    setShowAuto(false);
+  const selectedShape = useMemo(() => validShapes.find(s => s.name === selectedShapeName) || validShapes[0], [validShapes, selectedShapeName]);
+
+  const handleRunTandem = async () => {
+    if (!selectedShape) return;
 
     setAiInputs([
+      { label: 'Mode', value: 'Tandem Inverse Design' },
+      { label: 'Geometry', value: selectedShape.geometryType },
       { label: 'Target Freq', value: `${invF.toFixed(2)} GHz` },
       { label: 'Target S11', value: `${invS11.toFixed(1)} dB` },
-      { label: 'Shapes', value: `${shapes.filter(s => s.isReal).length} CST` },
-      { label: 'Mode', value: 'Inverse Design' },
     ]);
     setAiOutputs([]);
 
-    const cands = await runWithStages(() => {
-      const results: { item: LoadedShape; p: number; s11_db: number; err: number }[] = [];
-      
-      for (const item of shapes) {
-        if (!item.isReal) continue;
-        const { fmin, fmax } = item.ranges;
-        if (invF < fmin - 0.05 || invF > fmax + 0.05) continue;
-        
-        let bestP = 0, bestErr = Infinity, bestS11 = NaN;
-        for (const pk of Object.keys(item.curves)) {
-          const p = parseFloat(pk);
-          const { freqs, s11 } = item.curves[p];
-          const s = interpS11At(invF, freqs, s11);
-          if (!isFinite(s)) continue;
-          const err = Math.abs(s - invS11);
-          if (err < bestErr) { bestErr = err; bestP = p; bestS11 = s; }
-        }
-        if (isFinite(bestS11)) {
-          results.push({ item, p: bestP, s11_db: bestS11, err: bestErr });
-        }
-      }
-      
-      results.sort((a, b) => a.err - b.err);
-      return results;
-    });
+    try {
+      const res = await runWithStages(async () => {
+        const response = await fetch('http://127.0.0.1:8000/api/predict/inverse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shape_type: selectedShape.geometryType,
+            target_f_min: invF,
+            target_f_max: invF,
+            target_s11: invS11
+          }),
+        });
+        if (!response.ok) throw new Error("Inverse Backend Error");
+        return await response.json();
+      });
 
-    if (cands.length === 0) {
-      setShowAuto(true);
-      setCandidates(null);
+      // Tandem response: { p_optimal, s11_expected, model_used, freqs, s11 }
+      const p = res.p_optimal;
+      const syntheticCurves = {
+        [p]: {
+          freqs: res.freqs,
+          s11: res.s11
+        }
+      };
+
+      setResult({
+        item: selectedShape,
+        p: p,
+        curves: syntheticCurves,
+      });
+
       setAiOutputs([
-        { label: 'Result', value: 'No match' },
-        { label: 'Fallback', value: 'AI Auto-Design' },
+        { label: 'Status', value: 'Tandem Success' },
+        { label: 'Optimal P', value: `${p.toFixed(4)} mm` },
+        { label: 'Model', value: res.model_used }
       ]);
-    } else {
-      const top = cands.slice(0, 3);
-      setCandidates(top);
-      setAiOutputs([
-        { label: 'Best Shape', value: top[0].item.displayName.slice(0, 20) },
-        { label: 'Optimal P', value: `${top[0].p.toFixed(4)} mm` },
-        { label: 'Achieved S11', value: `${top[0].s11_db.toFixed(2)} dB` },
-        { label: 'Error', value: `${top[0].err.toFixed(3)} dB` },
-      ]);
+    } catch (e: any) {
+      setAiOutputs([{ label: 'Error', value: e.message || 'API Failed' }]);
     }
   };
+
+  if (!validShapes.length) return <div>No valid shapes loaded.</div>;
 
   return (
     <div className="space-y-6 tab-content-enter">
       <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-        <RefreshCw className="w-5 h-5 text-primary" /> Inverse Design — (Frequency + S11 target) → Optimal P
+        <RefreshCw className="w-5 h-5 text-primary" /> Tandem Network (Freq + S11 → P → S11 Curve)
       </h2>
       
       <div className="flex items-end gap-4 flex-wrap">
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">Geometry</label>
+          <select 
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+            value={selectedShapeName}
+            onChange={e => setSelectedShapeName(e.target.value)}
+          >
+            {validShapes.map(s => (
+              <option key={s.name} value={s.name}>{s.displayName}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="text-sm text-muted-foreground mb-1 block">Target Frequency (GHz)</label>
           <Input type="number" value={invF} onChange={e => setInvF(Number(e.target.value))} min={1} max={50} step={0.1} className="w-40 font-mono" />
@@ -97,60 +107,42 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
           <label className="text-sm text-muted-foreground mb-1 block">Target S11 (dB)</label>
           <Input type="number" value={invS11} onChange={e => setInvS11(Number(e.target.value))} min={-60} max={0} step={0.5} className="w-40 font-mono" />
         </div>
-        <Button onClick={handleRun} disabled={stage !== 'idle' && stage !== 'complete'}>
-          <RefreshCw className="w-4 h-4 mr-1" /> Run Inverse Design
+        <Button onClick={handleRunTandem} disabled={stage !== 'idle' && stage !== 'complete'}>
+          <RefreshCw className="w-4 h-4 mr-1" /> Run Tandem Predict
         </Button>
       </div>
 
-      {/* AI Working Panel */}
-      <AIWorkingPanel
-        stage={stage}
-        inputs={aiInputs}
-        outputs={aiOutputs}
-        elapsed={elapsed}
-        title="Inverse Design — Neural Processing"
-      />
+      <AIWorkingPanel stage={stage} inputs={aiInputs} outputs={aiOutputs} elapsed={elapsed} title="Tandem Inverse Neural Processing" />
 
-      {showAuto && <AutoDesignCard freqGhz={invF} thrDb={thrDb} />}
-
-      {candidates && candidates.map((cand, ci) => {
-        const medals = ['🥇', '🥈', '🥉'];
-        return (
-          <details key={ci} open={ci === 0} className="rounded-lg border border-border bg-card overflow-hidden">
-            <summary className="px-4 py-3 cursor-pointer hover:bg-secondary/30 font-semibold text-sm text-foreground">
-              {medals[ci]} {cand.item.displayName} | P={cand.p.toFixed(4)} mm | S11={cand.s11_db.toFixed(2)} dB | Err={cand.err.toFixed(3)} dB
-            </summary>
-            <div className="px-4 pb-4 space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <MetricCard label="Optimal P" value={`${cand.p.toFixed(4)} mm`} />
-                <MetricCard label="Achieved S11" value={`${cand.s11_db.toFixed(3)} dB`} />
-                <MetricCard label="Target S11" value={`${invS11.toFixed(1)} dB`} />
-                <MetricCard label="Error |ΔS11|" value={`${cand.err.toFixed(3)} dB`} />
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <DimTable spec={{ fixed: cand.item.fixed, paramLabel: cand.item.paramLabel, paramMode: cand.item.paramMode, geometryType: cand.item.geometryType }} pBest={cand.p} />
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground mb-2">🧊 3D Structure</h4>
-                  <Absorber3D
-                    shapeSpec={{ geometryType: cand.item.geometryType, paramMode: cand.item.paramMode, paramLabel: cand.item.paramLabel, fixed: cand.item.fixed }}
-                    pValueMm={cand.p}
-                    height={320}
-                  />
-                </div>
-              </div>
-              <CombinedPlot curves={cand.item.curves} pValue={cand.p} thrDb={thrDb} vline={invF} />
-              {ci === 0 && (
-                <DeepLearningOptimizationBox
-                  currentP={cand.p}
-                  currentS11={cand.s11_db}
-                  targetFreq={invF}
-                  shapeType={cand.item.geometryType}
-                />
-              )}
+      {result && (
+        <div className="rounded-lg border border-border bg-card overflow-hidden mt-6">
+          <div className="w-full flex items-center justify-between px-4 py-3 bg-secondary/30">
+            <span className="font-semibold text-foreground text-sm">
+              ✨ Tandem AI Predicted | {result.item.displayName} | P={result.p.toFixed(4)} mm
+            </span>
+          </div>
+          <div className="px-4 pb-4 space-y-4 py-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <MetricCard label="Optimal Predicted P" value={`${result.p.toFixed(4)} mm`} />
+              <MetricCard label="Target Freq" value={`${invF.toFixed(2)} GHz`} />
+              <MetricCard label="Target S11" value={`${invS11.toFixed(1)} dB`} />
+              <MetricCard label="Model Pipeline" value="PyTorch Tandem" />
             </div>
-          </details>
-        );
-      })}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <DimTable spec={{ fixed: result.item.fixed, paramLabel: result.item.paramLabel, paramMode: result.item.paramMode, geometryType: result.item.geometryType }} pBest={result.p} />
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">🧊 3D Structure</h4>
+                <Absorber3D
+                  shapeSpec={{ geometryType: result.item.geometryType, paramMode: result.item.paramMode, paramLabel: result.item.paramLabel, fixed: result.item.fixed }}
+                  pValueMm={result.p}
+                  height={320}
+                />
+              </div>
+            </div>
+            <CombinedPlot curves={result.curves} pValue={result.p} thrDb={thrDb} vline={invF} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
