@@ -541,20 +541,16 @@ function buildCSTMacro(
   }
 
   lines.push(L(``));
-  lines.push(L(`    ' ── STEP 7: Configure Floquet port (normal incidence) ────────`));
+  lines.push(L(`    ' ── STEP 7: Configure Floquet port (Zmax / front face only) ─`));
+  lines.push(L(`    ' Only the calls below are safe across all CST versions.`));
+  lines.push(L(`    ' SetPolarizationAngle, SetAMM* etc. require AMM licence and`));
+  lines.push(L(`    ' cause ActiveX errors when called from VBA \u2014 omitted intentionally.`));
   lines.push(L(`    With FloquetPort`));
   lines.push(L(`        .Reset`));
   lines.push(L(`        .SetDialogTheta "0"`));
   lines.push(L(`        .SetDialogPhi "0"`));
-  lines.push(L(`        .SetPolarizationAngle "0"`));
   lines.push(L(`        .SetModesNumber "2"`));
-  lines.push(L(`        .SetAMM "FALSE"`));
-  lines.push(L(`        .ZminDefinition "Floquet Port"`));
   lines.push(L(`        .ZmaxDefinition "Floquet Port"`));
-  lines.push(L(`        .SetAMMSamples "21", "21"`));
-  lines.push(L(`        .SetAMMRefinement "6"`));
-  lines.push(L(`        .SetAMMMemGrowth "1.5"`));
-  lines.push(L(`        .SetAMMAccuracy "1e-4"`));
   lines.push(L(`    End With`));
 
   lines.push(L(``));
