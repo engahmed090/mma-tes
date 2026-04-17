@@ -215,15 +215,19 @@ function buildCSTMacro(
   const eps_r    = 4.4;  // typical FR4
   const tan_d    = 0.02;
 
-  // Derived geometry
+  // Derived geometry — Z-axis stack-up:
+  //   Ground  : -(sub_h+gnd_t)  →  -sub_h
+  //   Substrate: -sub_h          →   0
+  //   Patch   :  0               →  +patch_t
   const fMin     = Number(bestShape.ranges.fmin.toFixed(3));
   const fMax     = Number(bestShape.ranges.fmax.toFixed(3));
   const halfUC   = (uc / 2).toFixed(6);
-  const zGndBot  = (-(sub_h + gnd_t)).toFixed(6);
-  const zGndTop  = (-sub_h).toFixed(6);
-  const zSubTop  = sub_h.toFixed(6);
-  const zPatBot  = sub_h.toFixed(6);
-  const zPatTop  = (sub_h + patch_t).toFixed(6);
+  const zGndBot  = (-(sub_h + gnd_t)).toFixed(6);   //  e.g. -1.635
+  const zGndTop  = (-sub_h).toFixed(6);              //  e.g. -1.6
+  const zSubBot  = (-sub_h).toFixed(6);              //  e.g. -1.6  (= zGndTop)
+  const zSubTop  = '0';                              //  substrate top at Z=0
+  const zPatBot  = '0';                              //  patch base  at Z=0
+  const zPatTop  = patch_t.toFixed(6);               //  e.g.  0.035
   const halfP    = (bestP / 2).toFixed(6);
 
   // Helper: emit a line
@@ -391,7 +395,7 @@ function buildCSTMacro(
   lines.push(L(`        .Material "FR-4 (lossy)"`));
   lines.push(L(`        .Xrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Yrange "-${halfUC}", "${halfUC}"`));
-  lines.push(L(`        .Zrange "0", "${zSubTop}"`));
+  lines.push(L(`        .Zrange "${zSubBot}", "${zSubTop}"`));
   lines.push(L(`        .Create`));
   lines.push(L(`    End With`));
 
