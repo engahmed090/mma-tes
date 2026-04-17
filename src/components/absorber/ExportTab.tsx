@@ -269,60 +269,60 @@ function buildCSTMacro(
     L(`    ' ── STEP 1: Set parametric variables ─────────────────────────`),
     L(`    ' All dimensions in millimetres (mm).`),
     L(`    ' You can edit these values and re-run the macro at any time.`),
-    L(`    SetParameterDouble "P",       ${bestP}`),
-    L(`    SetParameterDouble "UC",      ${uc}`),
-    L(`    SetParameterDouble "sub_h",   ${sub_h}`),
-    L(`    SetParameterDouble "patch_t", ${patch_t}`),
-    L(`    SetParameterDouble "gnd_t",   ${gnd_t}`),
-    L(`    SetParameterDouble "eps_r",   ${eps_r}`),
-    L(`    SetParameterDouble "tan_d",   ${tan_d}`),
+    L(`    StoreParameter "P",       "${bestP}"`),
+    L(`    StoreParameter "UC",      "${uc}"`),
+    L(`    StoreParameter "sub_h",   "${sub_h}"`),
+    L(`    StoreParameter "patch_t", "${patch_t}"`),
+    L(`    StoreParameter "gnd_t",   "${gnd_t}"`),
+    L(`    StoreParameter "eps_r",   "${eps_r}"`),
+    L(`    StoreParameter "tan_d",   "${tan_d}"`),
   ];
 
   // Extra geometry-specific parameters
   if (dim.ringOuterRadius_mm !== null) {
-    lines.push(L(`    SetParameterDouble "Ro",     ${dim.ringOuterRadius_mm}`));
-    lines.push(L(`    SetParameterDouble "Ri",     ${dim.ringInnerRadius_mm ?? 0}`));
+    lines.push(L(`    StoreParameter "Ro",     "${dim.ringOuterRadius_mm}"`));
+    lines.push(L(`    StoreParameter "Ri",     "${dim.ringInnerRadius_mm ?? 0}"`));
   }
   if (dim.ring1OuterRadius_mm !== null) {
-    lines.push(L(`    SetParameterDouble "Ro1",    ${dim.ring1OuterRadius_mm}`));
-    lines.push(L(`    SetParameterDouble "Ri1",    ${dim.ring1InnerRadius_mm ?? 0}`));
+    lines.push(L(`    StoreParameter "Ro1",    "${dim.ring1OuterRadius_mm}"`));
+    lines.push(L(`    StoreParameter "Ri1",    "${dim.ring1InnerRadius_mm ?? 0}"`));
   }
   if (dim.ring2OuterRadius_mm !== null) {
-    lines.push(L(`    SetParameterDouble "Ro2",    ${dim.ring2OuterRadius_mm}`));
-    lines.push(L(`    SetParameterDouble "Ri2",    ${dim.ring2InnerRadius_mm ?? 0}`));
+    lines.push(L(`    StoreParameter "Ro2",    "${dim.ring2OuterRadius_mm}"`));
+    lines.push(L(`    StoreParameter "Ri2",    "${dim.ring2InnerRadius_mm ?? 0}"`));
   }
   if (dim.spanFactor !== null) {
-    lines.push(L(`    SetParameterDouble "span_f", ${dim.spanFactor}`));
+    lines.push(L(`    StoreParameter "span_f", "${dim.spanFactor}"`));
   }
   if (dim.armWidthFactor !== null) {
-    lines.push(L(`    SetParameterDouble "arm_wf", ${dim.armWidthFactor}`));
+    lines.push(L(`    StoreParameter "arm_wf", "${dim.armWidthFactor}"`));
   }
   if (dim.rectYFactor !== null) {
-    lines.push(L(`    SetParameterDouble "y_fac",  ${dim.rectYFactor}`));
+    lines.push(L(`    StoreParameter "y_fac",  "${dim.rectYFactor}"`));
   }
   if (dim.traceWidth_mm !== null) {
-    lines.push(L(`    SetParameterDouble "trace_w", ${dim.traceWidth_mm}`));
+    lines.push(L(`    StoreParameter "trace_w", "${dim.traceWidth_mm}"`));
   }
   if (dim.spiralGap_mm !== null) {
-    lines.push(L(`    SetParameterDouble "spg",    ${dim.spiralGap_mm}`));
+    lines.push(L(`    StoreParameter "spg",    "${dim.spiralGap_mm}"`));
   }
   if (dim.spiralTurns !== null) {
-    lines.push(L(`    SetParameterDouble "turns",  ${dim.spiralTurns}`));
+    lines.push(L(`    StoreParameter "turns",  "${dim.spiralTurns}"`));
   }
   if (dim.centerRadius_mm !== null) {
-    lines.push(L(`    SetParameterDouble "ctr_r",  ${dim.centerRadius_mm}`));
+    lines.push(L(`    StoreParameter "ctr_r",  "${dim.centerRadius_mm}"`));
   }
   if (dim.ringCount !== null) {
-    lines.push(L(`    SetParameterDouble "r_cnt",  ${dim.ringCount}`));
+    lines.push(L(`    StoreParameter "r_cnt",  "${dim.ringCount}"`));
   }
   if (dim.ringWidth_mm !== null) {
-    lines.push(L(`    SetParameterDouble "r_w",    ${dim.ringWidth_mm}`));
+    lines.push(L(`    StoreParameter "r_w",    "${dim.ringWidth_mm}"`));
   }
   if (dim.ringGap_mm !== null) {
-    lines.push(L(`    SetParameterDouble "r_gap",  ${dim.ringGap_mm}`));
+    lines.push(L(`    StoreParameter "r_gap",  "${dim.ringGap_mm}"`));
   }
   if (dim.outerFactor !== null) {
-    lines.push(L(`    SetParameterDouble "out_f",  ${dim.outerFactor}`));
+    lines.push(L(`    StoreParameter "out_f",  "${dim.outerFactor}"`));
   }
 
   lines.push(L(``));
@@ -340,7 +340,7 @@ function buildCSTMacro(
   lines.push(L(`    ' ── STEP 3: Define substrate material ───────────────────────`));
   lines.push(L(`    With Material`));
   lines.push(L(`        .Reset`));
-  lines.push(L(`        .Name "${subMat}"`));
+  lines.push(L(`        .Name "FR-4 (lossy)"`));
   lines.push(L(`        .Folder ""`));
   lines.push(L(`        .FrqType "all"`));
   lines.push(L(`        .Type "Normal"`));
@@ -358,7 +358,7 @@ function buildCSTMacro(
   lines.push(L(`        .Reset`));
   lines.push(L(`        .Name "Ground"`));
   lines.push(L(`        .Component "Component1"`));
-  lines.push(L(`        .Material "PEC"`));
+  lines.push(L(`        .Material "Copper (annealed)"`));
   lines.push(L(`        .Xrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Yrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Zrange "${zGndBot}", "${zGndTop}"`));
@@ -371,7 +371,7 @@ function buildCSTMacro(
   lines.push(L(`        .Reset`));
   lines.push(L(`        .Name "Substrate"`));
   lines.push(L(`        .Component "Component1"`));
-  lines.push(L(`        .Material "${subMat}"`));
+  lines.push(L(`        .Material "FR-4 (lossy)"`));
   lines.push(L(`        .Xrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Yrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Zrange "0", "${zSubTop}"`));
@@ -389,7 +389,7 @@ function buildCSTMacro(
     lines.push(L(`        .Reset`));
     lines.push(L(`        .Name "Patch"`));
     lines.push(L(`        .Component "Component1"`));
-    lines.push(L(`        .Material "PEC"`));
+    lines.push(L(`        .Material "Copper (annealed)"`));
     lines.push(L(`        .Xrange "-${halfP}", "${halfP}"`));
     lines.push(L(`        .Yrange "-${halfP}", "${halfP}"`));
     lines.push(L(`        .Zrange "${zPatBot}", "${zPatTop}"`));
@@ -403,7 +403,7 @@ function buildCSTMacro(
     lines.push(L(`        .Reset`));
     lines.push(L(`        .Name "Patch"`));
     lines.push(L(`        .Component "Component1"`));
-    lines.push(L(`        .Material "PEC"`));
+    lines.push(L(`        .Material "Copper (annealed)"`));
     lines.push(L(`        .Xrange "-${halfP}", "${halfP}"`));
     lines.push(L(`        .Yrange "-${halfPy}", "${halfPy}"`));
     lines.push(L(`        .Zrange "${zPatBot}", "${zPatTop}"`));
@@ -417,13 +417,14 @@ function buildCSTMacro(
     lines.push(L(`        .Reset`));
     lines.push(L(`        .Name "Ring"`));
     lines.push(L(`        .Component "Component1"`));
-    lines.push(L(`        .Material "PEC"`));
+    lines.push(L(`        .Material "Copper (annealed)"`));
     lines.push(L(`        .Outerradius "${ro}"`));
     lines.push(L(`        .Innerradius "${ri}"`));
     lines.push(L(`        .Xcenter "0"`));
     lines.push(L(`        .Ycenter "0"`));
     lines.push(L(`        .Zcenter "0"`));
     lines.push(L(`        .Zrange "${zPatBot}", "${zPatTop}"`));
+    lines.push(L(`        .Axis "z"`));
     lines.push(L(`        .Segments "0"`));
     lines.push(L(`        .Create`));
     lines.push(L(`    End With`));
@@ -441,13 +442,14 @@ function buildCSTMacro(
       lines.push(L(`        .Reset`));
       lines.push(L(`        .Name "${name}"`));
       lines.push(L(`        .Component "Component1"`));
-      lines.push(L(`        .Material "PEC"`));
+      lines.push(L(`        .Material "Copper (annealed)"`));
       lines.push(L(`        .Outerradius "${roS}"`));
       lines.push(L(`        .Innerradius "${riS}"`));
       lines.push(L(`        .Xcenter "0"`));
       lines.push(L(`        .Ycenter "0"`));
       lines.push(L(`        .Zcenter "0"`));
       lines.push(L(`        .Zrange "${zPatBot}", "${zPatTop}"`));
+      lines.push(L(`        .Axis "z"`));
       lines.push(L(`        .Segments "0"`));
       lines.push(L(`        .Create`));
       lines.push(L(`    End With`));
@@ -455,8 +457,6 @@ function buildCSTMacro(
 
   } else if (gt === 'plus_cross_patch' || gt === 'arrow_square_circle') {
     // Cross/Plus: two overlapping bricks forming a + shape
-    const span  = ((dim.spanFactor ?? 0.87) * uc).toFixed(6);
-    const armW  = ((dim.armWidthFactor ?? 0.10) * uc).toFixed(6);
     const halfSpan = ((dim.spanFactor ?? 0.87) * uc / 2).toFixed(6);
     const halfArmW = ((dim.armWidthFactor ?? 0.10) * uc / 2).toFixed(6);
     lines.push(L(`    ' Horizontal bar of cross`));
@@ -464,7 +464,7 @@ function buildCSTMacro(
     lines.push(L(`        .Reset`));
     lines.push(L(`        .Name "PatchH"`));
     lines.push(L(`        .Component "Component1"`));
-    lines.push(L(`        .Material "PEC"`));
+    lines.push(L(`        .Material "Copper (annealed)"`));
     lines.push(L(`        .Xrange "-${halfSpan}", "${halfSpan}"`));
     lines.push(L(`        .Yrange "-${halfArmW}", "${halfArmW}"`));
     lines.push(L(`        .Zrange "${zPatBot}", "${zPatTop}"`));
@@ -475,7 +475,7 @@ function buildCSTMacro(
     lines.push(L(`        .Reset`));
     lines.push(L(`        .Name "PatchV"`));
     lines.push(L(`        .Component "Component1"`));
-    lines.push(L(`        .Material "PEC"`));
+    lines.push(L(`        .Material "Copper (annealed)"`));
     lines.push(L(`        .Xrange "-${halfArmW}", "${halfArmW}"`));
     lines.push(L(`        .Yrange "-${halfSpan}", "${halfSpan}"`));
     lines.push(L(`        .Zrange "${zPatBot}", "${zPatTop}"`));
@@ -495,21 +495,21 @@ function buildCSTMacro(
     lines.push(L(`    Dim t As Integer, rO As Double, rI As Double`));
     lines.push(L(`    Dim spiralComp As String : spiralComp = "Component1"`));
     lines.push(L(`    rO = ${outerMaxHalf}`));
-    lines.push(L(`    Dim tw As Double : tw = ${tw}`));
-    lines.push(L(`    Dim sg As Double : sg = ${sg}`));
+    lines.push(L(`    Dim spTw As Double : spTw = ${tw}`));
+    lines.push(L(`    Dim spSg As Double : spSg = ${sg}`));
     lines.push(L(`    For t = 1 To ${turns}`));
-    lines.push(L(`        rI = rO - tw`));
+    lines.push(L(`        rI = rO - spTw`));
     lines.push(L(`        With Brick`));
     lines.push(L(`            .Reset`));
-    lines.push(L(`            .Name "SpiralTurn" & t`));
+    lines.push(L(`            .Name "SpiralTurn" & CStr(t)`));
     lines.push(L(`            .Component spiralComp`));
-    lines.push(L(`            .Material "PEC"`));
+    lines.push(L(`            .Material "Copper (annealed)"`));
     lines.push(L(`            .Xrange CStr(-rO), CStr(rO)`));
     lines.push(L(`            .Yrange CStr(rI), CStr(rO)`));
     lines.push(L(`            .Zrange "${zPatBot}", "${zPatTop}"`));
     lines.push(L(`            .Create`));
     lines.push(L(`        End With`));
-    lines.push(L(`        rO = rI - sg`));
+    lines.push(L(`        rO = rI - spSg`));
     lines.push(L(`    Next t`));
 
   } else {
