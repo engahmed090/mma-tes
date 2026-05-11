@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useShapeData } from '@/hooks/useShapeData';
 import FindBestTab from '@/components/absorber/FindBestTab';
 import InverseDesignTab from '@/components/absorber/InverseDesignTab';
-import BioSensingTab from '@/components/absorber/BioSensingTab';
 import ChatTab from '@/components/absorber/ChatTab';
 import ExportTab from '@/components/absorber/ExportTab';
 import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2 } from 'lucide-react';
@@ -79,11 +78,10 @@ const Index = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
-                  activeTab === tab.id
+                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${activeTab === tab.id
                     ? 'border-primary text-foreground bg-secondary/30'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/20'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -105,7 +103,21 @@ const Index = () => {
               <>
                 {activeTab === 'find' && <FindBestTab shapes={shapes} pickAllInFreq={pickAllInFreq} pickAllInRange={pickAllInRange} thrDb={thrDb} />}
                 {activeTab === 'inverse' && <InverseDesignTab shapes={shapes} thrDb={thrDb} />}
-                {activeTab === 'bio' && <BioSensingTab />}
+                
+                {/* 3rd tab: Sensing */}
+                <div className={activeTab === 'bio' ? 'block w-full flex-grow' : 'hidden'}>
+                  <div className="w-full h-[85vh] min-h-[650px] rounded-2xl overflow-hidden border border-gray-200 shadow-2xl bg-transparent my-4">
+                    <iframe 
+                      src="https://meta-biosensor.streamlit.app/?embed=true" 
+                      width="100%" 
+                      height="100%" 
+                      frameBorder="0"
+                      title="Meta Biosensor Live Sensing Dashboard"
+                      style={{ border: "none", width: "100%", height: "100%" }}
+                      className="w-full h-full"
+                    />
+                  </div>
+                </div>
                 {activeTab === 'chat' && <ChatTab shapes={shapes} thrDb={thrDb} />}
                 {activeTab === 'report' && <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
               </>
