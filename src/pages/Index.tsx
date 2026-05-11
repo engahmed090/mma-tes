@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useShapeData } from '@/hooks/useShapeData';
 import FindBestTab from '@/components/absorber/FindBestTab';
 import InverseDesignTab from '@/components/absorber/InverseDesignTab';
+import BioSensingTab from '@/components/absorber/BioSensingTab';
 import ChatTab from '@/components/absorber/ChatTab';
 import ExportTab from '@/components/absorber/ExportTab';
-import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2, Cpu, MonitorPlay } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,8 +18,14 @@ const TABS = [
   { id: 'report', label: '📦 Export / Download', icon: Download },
 ];
 
+const BIO_SUB_TABS = [
+  { id: 'controls', label: '🔬 Hardware Controls', icon: Cpu },
+  { id: 'streamlit', label: '📡 Live Streamlit Twin', icon: MonitorPlay },
+];
+
 const Index = () => {
   const [activeTab, setActiveTab] = useState('find');
+  const [bioSubTab, setBioSubTab] = useState('controls');
   const [thrDb, setThrDb] = useState(-10);
   const [includePaper, setIncludePaper] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -35,7 +42,7 @@ const Index = () => {
               🧲 Metamaterial Absorber AI Platform <span className="text-sm font-normal text-primary">v5</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              CST-trained neural networks for absorber parameter prediction, optimization & thesis reporting
+              CST-trained neural networks for absorber parameter prediction, optimization &amp; thesis reporting
             </p>
             <div className="flex flex-wrap gap-1.5 mt-3">
               <span className="badge badge-blue">Forward: (Freq,P)→S11</span>
@@ -78,10 +85,11 @@ const Index = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${activeTab === tab.id
+                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
+                  activeTab === tab.id
                     ? 'border-primary text-foreground bg-secondary/30'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/20'
-                  }`}
+                }`}
               >
                 {tab.label}
               </button>
@@ -103,21 +111,53 @@ const Index = () => {
               <>
                 {activeTab === 'find' && <FindBestTab shapes={shapes} pickAllInFreq={pickAllInFreq} pickAllInRange={pickAllInRange} thrDb={thrDb} />}
                 {activeTab === 'inverse' && <InverseDesignTab shapes={shapes} thrDb={thrDb} />}
-                
-                {/* 3rd tab: Sensing */}
-                <div className={activeTab === 'bio' ? 'block w-full flex-grow' : 'hidden'}>
-                  <div className="w-full h-[85vh] min-h-[650px] rounded-2xl overflow-hidden border border-gray-200 shadow-2xl bg-transparent my-4">
-                    <iframe 
-                      src="https://meta-biosensor.streamlit.app/?embed=true" 
-                      width="100%" 
-                      height="100%" 
-                      frameBorder="0"
-                      title="Meta Biosensor Live Sensing Dashboard"
-                      style={{ border: "none", width: "100%", height: "100%" }}
-                      className="w-full h-full"
-                    />
+
+                {/* ═══ 3rd tab: Bio-Sensing — permanently mounted to preserve Streamlit WebSocket ═══ */}
+                <div className={activeTab === 'bio' ? 'block w-full' : 'hidden'}>
+
+                  {/* ── Sub-tab navigation bar ── */}
+                  <div className="flex gap-2 mb-5 p-1 rounded-xl bg-secondary/40 border border-border w-fit">
+                    {BIO_SUB_TABS.map(st => (
+                      <button
+                        key={st.id}
+                        onClick={() => setBioSubTab(st.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                          bioSubTab === st.id
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        <st.icon className="w-4 h-4" />
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="w-full mt-4">
+                    {/* Sub-Tab A: Hardware Controls — original native BioSensing content */}
+                    <div className={bioSubTab === 'controls' ? 'block' : 'hidden'}>
+                      <BioSensingTab />
+                    </div>
+
+                    {/* Sub-Tab B: Live Streamlit Twin — permanently mounted in DOM, visibility toggled via CSS only */}
+                    <div
+                      className={`w-full h-[85vh] min-h-[650px] rounded-2xl overflow-hidden border border-border shadow-2xl bg-transparent ${
+                        bioSubTab === 'streamlit' ? 'block' : 'hidden'
+                      }`}
+                    >
+                      <iframe
+                        src="https://meta-biosensor.streamlit.app/?embed=true"
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                        title="Meta Biosensor Live Twin"
+                        style={{ border: 'none', width: '100%', height: '100%' }}
+                        className="w-full h-full"
+                      />
+                    </div>
                   </div>
                 </div>
+
                 {activeTab === 'chat' && <ChatTab shapes={shapes} thrDb={thrDb} />}
                 {activeTab === 'report' && <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
               </>
