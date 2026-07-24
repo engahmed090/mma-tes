@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 const TABS = [
   { id: 'find', label: '🔍 Find Best Absorber', icon: Search },
   { id: 'inverse', label: '🔄 Inverse Design', icon: RefreshCw },
-  { id: 'bio', label: '🩺 Bio-Sensing', icon: HeartPulse },
+  { id: 'bio', label: '🩸 Blood Cancer Sensing', icon: HeartPulse },
   { id: 'chat', label: '🤖 AI Expert Chat', icon: Bot },
   { id: 'report', label: '📦 Export / Download', icon: Download },
 ];
@@ -48,7 +48,7 @@ const Index = () => {
               <span className="badge badge-blue">Forward: (Freq,P)→S11</span>
               <span className="badge badge-green">Inverse: (Freq,S11)→P</span>
               <span className="badge badge-amber">CST Brain: Auto-Design Fallback</span>
-              <span className="badge badge-purple">Ref Brain: Scholar+ResearchGate</span>
+              <span className="badge badge-purple">Blood Sensing: εr∈{1,60,68}</span>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
