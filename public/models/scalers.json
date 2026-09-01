@@ -1,0 +1,15 @@
+{
+  "freq_min": 1.0,
+  "freq_max": 49.80400085449219,
+  "p_min": 5.0,
+  "p_max": 5.0,
+  "s11_min": -15.635918617248535,
+  "s11_max": -9.643274228121157e-16,
+  "shape_count": 4,
+  "shape_encoding": {
+    "circle": 0,
+    "rectangle": 1,
+    "ring": 2,
+    "square": 3
+  }
+}

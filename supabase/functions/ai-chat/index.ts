@@ -106,7 +106,7 @@ async function callLLM(messages: any[], stream: boolean) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: "llama3-70b-8192",
       messages,
       stream,
       temperature: 0.7,
