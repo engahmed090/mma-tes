@@ -144,7 +144,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
                   currentP={cand.p}
                   currentS11={cand.s11_db}
                   targetFreq={invF}
-                  shapeType={cand.item.geometryType}
+                  shapeId={cand.item.name}
                 />
               )}
             </div>

@@ -5,16 +5,18 @@ interface DeepLearningOptimizationBoxProps {
   currentP: number;
   currentS11: number;
   targetFreq: number;
-  shapeType: string;
+  shapeId: string;
 }
 
-const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = ({ currentP, currentS11, targetFreq, shapeType }) => {
+const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = ({ currentP, currentS11, targetFreq, shapeId }) => {
   const [predictedP, setPredictedP] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Only trigger if S11 fails to drop below -10 dB (i.e., poor absorption)
+    setPredictedP(null);
+    setError(null);
     if (currentS11 <= -10) return;
 
     let isMounted = true;
@@ -22,28 +24,31 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('https://ahmedeng090-mma-backend.hf.space/api/predict/inverse', {
+        const res = await fetch(`${import.meta.env.VITE_PREDICTION_API_URL || 'https://ahmedeng090-mma-backend.hf.space'}/api/predict/inverse`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             target_f_min: targetFreq,
             target_f_max: targetFreq,
             target_s11: -10.0,
-            shape_type: shapeType,
+            shape_type: shapeId,
           }),
         });
 
+        const data = await res.json();
         if (!res.ok) {
-          throw new Error(`API Error: ${res.statusText}`);
+          throw new Error(typeof data.detail === 'string' ? data.detail : `API Error: ${res.statusText}`);
         }
 
-        const data = await res.json();
+        if (data.prediction_source !== 'pytorch' || !data.model_used || !Number.isFinite(data.p_optimal)) {
+          throw new Error('Backend did not return a verified model prediction.');
+        }
         if (isMounted) {
           setPredictedP(data.p_optimal);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (isMounted) {
-          setError(e.message || 'Unknown error occurred while contacting the PyTorch backend.');
+          setError(e instanceof Error ? e.message : 'Unknown error occurred while contacting the PyTorch backend.');
         }
       } finally {
         if (isMounted) {
@@ -56,7 +61,7 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
     return () => {
       isMounted = false;
     };
-  }, [currentS11, targetFreq, shapeType]);
+  }, [currentS11, targetFreq, shapeId]);
 
   // If absorption is good enough, we do not show the fallback alert
   if (currentS11 <= -10) return null;
@@ -64,7 +69,7 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
   return (
     <div className="mt-4 p-4 rounded-lg border border-destructive/50 bg-destructive/10 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <h4 className="flex items-center gap-2 font-bold text-destructive">
-        <AlertTriangle className="w-5 h-5" /> Deep Learning Geometric Optimization Fallback
+        <AlertTriangle className="w-5 h-5" /> Deep Learning Geometry Suggestion
       </h4>
       <div className="mt-2 text-sm text-foreground space-y-2">
         <p>
@@ -84,12 +89,12 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
           </p>
         )}
 
-        {predictedP !== null && !loading && (
+        {predictedP !== null && !loading && !error && (
           <p className="mt-3 leading-relaxed">
             Based on the PyTorch neural network prediction, it is recommended to scale the geometric parameter P
             by <strong>ΔP = {Math.abs(predictedP - currentP).toFixed(4)} mm</strong> (e.g., from {currentP.toFixed(4)} mm
-            to {predictedP.toFixed(4)} mm). This predicted tuning will shift the resonance frequency to satisfy
-            the broadband absorption constraints.
+            to {predictedP.toFixed(4)} mm). This is a single-frequency model suggestion; validate its response
+            before treating it as an optimized design.
           </p>
         )}
       </div>

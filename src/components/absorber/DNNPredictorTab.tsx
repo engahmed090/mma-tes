@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useS11Prediction, ScalersData } from '@/hooks/useS11Prediction';
+import { useS11Prediction } from '@/hooks/useS11Prediction';
 import { Button } from '@/components/ui/button';
 import { Upload, Brain, RefreshCw, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 import {
@@ -39,18 +39,18 @@ function parseVNAFile(text: string): VNAPoint[] | null {
 }
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
-const SHAPE_COLORS: Record<string, string> = {
-  circle: '#60a5fa', rectangle: '#34d399', ring: '#f472b6', square: '#a78bfa',
-};
+const SAMPLE_LABELS: Record<number, string> = { 1: 'Air', 60: 'Normal Blood', 68: 'Cancer Blood' };
+const SAMPLE_COLORS: Record<number, string> = { 1: '#60a5fa', 60: '#34d399', 68: '#f472b6' };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const DNNPredictorTab: React.FC = () => {
-  const { weights, scalers, loading, error, predict } = useS11Prediction();
+  const { scalers, loading, error, predict } = useS11Prediction();
 
-  const [selectedShape, setSelectedShape] = useState<string>('');
-  const [pMm, setPMm] = useState<number>(5.0);
+  const [epsR, setEpsR] = useState<number | null>(null);
+  const [predictionError, setPredictionError] = useState('');
+  const [pMm, setPMm] = useState<number>(12.0);
   const [freqStart, setFreqStart] = useState<number>(1);
-  const [freqEnd, setFreqEnd] = useState<number>(20);
+  const [freqEnd, setFreqEnd] = useState<number>(5);
   const [nPoints, setNPoints] = useState<number>(200);
   const [prediction, setPrediction] = useState<{ freq: number; s11: number }[] | null>(null);
   const [modelMeta, setModelMeta] = useState<{ rmse: number; r2: number; n: number } | null>(null);
@@ -62,19 +62,15 @@ const DNNPredictorTab: React.FC = () => {
   const [showVna, setShowVna] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Init shape from scalers
+  // Use the input domain exported by train_dnn.py.
   useEffect(() => {
-    if (scalers && !selectedShape) {
-      const shapes = Object.keys(scalers.shape_encoding);
-      if (shapes.length) {
-        setSelectedShape(shapes[0]);
-        const s = scalers;
-        setPMm(parseFloat(((s.p_min + s.p_max) / 2).toFixed(2)));
-        setFreqStart(parseFloat(s.freq_min.toFixed(1)));
-        setFreqEnd(parseFloat(s.freq_max.toFixed(1)));
-      }
+    if (scalers) {
+      setEpsR(scalers.eps_values[0]);
+      setPMm((scalers.w_min + scalers.w_max) / 2);
+      setFreqStart(scalers.freq_min);
+      setFreqEnd(scalers.freq_max);
     }
-  }, [scalers, selectedShape]);
+  }, [scalers]);
 
   // Load VNA data from localStorage on mount
   useEffect(() => {
@@ -92,17 +88,22 @@ const DNNPredictorTab: React.FC = () => {
 
   // Run prediction
   const runPrediction = useCallback(() => {
-    if (!selectedShape || !scalers) return;
-    const result = predict(selectedShape, pMm, freqStart, freqEnd, nPoints);
-    if (result) {
-      setPrediction(result.points);
-      setModelMeta({ rmse: result.rmse, r2: result.r2, n: result.nSamples });
+    if (epsR === null || !scalers) return;
+    try {
+      const result = predict(epsR, pMm, freqStart, freqEnd, nPoints);
+      setPrediction(result?.points ?? null);
+      setModelMeta(result ? { rmse: result.rmse, r2: result.r2, n: result.nSamples } : null);
+      setPredictionError('');
+    } catch (error) {
+      setPrediction(null);
+      setModelMeta(null);
+      setPredictionError(error instanceof Error ? error.message : 'Prediction failed.');
     }
-  }, [selectedShape, pMm, freqStart, freqEnd, nPoints, scalers, predict]);
+  }, [epsR, pMm, freqStart, freqEnd, nPoints, scalers, predict]);
 
   useEffect(() => {
-    if (!loading && !error && selectedShape) runPrediction();
-  }, [loading, error, selectedShape, pMm, freqStart, freqEnd, nPoints, runPrediction]);
+    if (!loading && !error && epsR !== null) runPrediction();
+  }, [loading, error, epsR, runPrediction]);
 
   // VNA upload handler
   const handleVNAUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,7 +155,7 @@ const DNNPredictorTab: React.FC = () => {
     return Array.from(map.values()).sort((a, b) => a.freq - b.freq);
   }, [prediction, vnaData, showVna]);
 
-  const shapes = scalers ? Object.keys(scalers.shape_encoding) : [];
+  const samples = scalers?.eps_values ?? [];
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -166,7 +167,7 @@ const DNNPredictorTab: React.FC = () => {
         </div>
         <div>
           <h2 className="text-xl font-bold text-foreground">DNN S11 Predictor</h2>
-          <p className="text-xs text-muted-foreground">Pure-JS neural network · No WASM · Instant inference</p>
+          <p className="text-xs text-muted-foreground">Blood-sensing neural network · Frequency, patch width, and permittivity</p>
         </div>
         {modelMeta && (
           <div className="ml-auto flex gap-3 text-xs font-mono text-muted-foreground">
@@ -197,20 +198,22 @@ const DNNPredictorTab: React.FC = () => {
         </div>
       )}
 
+      {predictionError && <p role="alert" className="text-sm text-destructive">{predictionError}</p>}
+
       {/* Controls */}
       {!loading && !error && scalers && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-secondary/20 border border-border">
-          {/* Shape */}
+          {/* Sample permittivity */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Shape</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Sample (relative permittivity)</label>
             <select
-              id="dnn-shape-select"
-              value={selectedShape}
-              onChange={e => setSelectedShape(e.target.value)}
+              id="dnn-sample-select"
+              value={epsR ?? ''}
+              onChange={e => setEpsR(Number(e.target.value))}
               className="w-full rounded-lg border border-border bg-background text-foreground text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
             >
-              {shapes.map(s => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              {samples.map(eps => (
+                <option key={eps} value={eps}>{SAMPLE_LABELS[eps] ?? 'Sample'} (εr={eps})</option>
               ))}
             </select>
           </div>
@@ -218,19 +221,19 @@ const DNNPredictorTab: React.FC = () => {
           {/* P slider */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
-              P (patch) = <span className="text-primary font-mono">{pMm.toFixed(2)} mm</span>
+              Patch width (w) = <span className="text-primary font-mono">{pMm.toFixed(2)} mm</span>
             </label>
             <input
               id="dnn-p-slider"
               type="range"
-              min={scalers.p_min} max={scalers.p_max}
-              step={(scalers.p_max - scalers.p_min) / 100}
+              min={scalers.w_min} max={scalers.w_max}
+              step={scalers.w_step_mm}
               value={pMm}
               onChange={e => setPMm(parseFloat(e.target.value))}
               className="w-full accent-primary"
             />
             <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>{scalers.p_min.toFixed(1)}</span><span>{scalers.p_max.toFixed(1)}</span>
+              <span>{scalers.w_min.toFixed(1)}</span><span>{scalers.w_max.toFixed(1)}</span>
             </div>
           </div>
 
@@ -261,7 +264,7 @@ const DNNPredictorTab: React.FC = () => {
         <div className="rounded-xl border border-border bg-secondary/10 p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-foreground">
-              S11 Prediction — {selectedShape} · P={pMm.toFixed(2)} mm
+              S11 Prediction — {epsR !== null ? SAMPLE_LABELS[epsR] : ''} · w={pMm.toFixed(2)} mm
             </h3>
             {vnaData && (
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
@@ -299,7 +302,7 @@ const DNNPredictorTab: React.FC = () => {
               {/* DNN prediction line */}
               <Line
                 type="monotone" dataKey="dnn" dot={false} strokeWidth={2.5}
-                stroke={SHAPE_COLORS[selectedShape] ?? '#60a5fa'}
+                stroke={SAMPLE_COLORS[epsR ?? 1] ?? '#60a5fa'}
                 isAnimationActive={false}
               />
 
@@ -395,11 +398,10 @@ const DNNPredictorTab: React.FC = () => {
 
       {/* Training hint */}
       <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border font-mono space-y-1">
-        <p className="font-semibold text-foreground">🧪 Re-train / Fine-tune on real VNA data:</p>
+        <p className="font-semibold text-foreground">🧪 Train the blood-sensing model:</p>
         <p># Train on CST data only:</p>
         <p className="text-primary">py ml_pipeline/train_dnn.py --data-dir . --out public/models --epochs 500</p>
-        <p className="mt-1"># Fine-tune on real VNA measurements:</p>
-        <p className="text-yellow-400">py ml_pipeline/train_hybrid_vna.py --vna-dir ./vna_data --out public/models</p>
+        <p>VNA upload overlays measurements; it does not retrain this model.</p>
       </div>
     </div>
   );

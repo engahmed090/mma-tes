@@ -239,7 +239,7 @@ function ShapeResultCard({ result, idx, thrDb, vline, vspan }: { result: any; id
               currentP={pBest}
               currentS11={s11Val}
               targetFreq={vline ?? (vspan ? (vspan[0] + vspan[1]) / 2 : 10)}
-              shapeType={result.item.geometryType}
+              shapeId={result.item.name}
             />
           )}
           {Object.keys(result.item.curves).length > 1 && (

@@ -25,3 +25,9 @@ dist-ssr
 
 .vercel
 .env*.local
+
+# Local prediction validation environments
+.venv/
+.pnpm-store/
+__pycache__/
+.pytest_cache/

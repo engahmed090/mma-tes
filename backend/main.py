@@ -1,146 +1,80 @@
-import os
+from pathlib import Path
+from typing import Literal
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import torch
-import numpy as np
+from pydantic import BaseModel, Field
+try:
+    from .model_runtime import ModelUnavailable, load_predictor
+except ImportError:
+    from model_runtime import ModelUnavailable, load_predictor
 
 app = FastAPI(title="Generative AI Backend for Absorbers")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Move .pt files location logic
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS_DIR = ROOT_DIR  # The user placed the models in root
-
-# Cache for loaded models
-loaded_models = {}
-
-def get_model(model_path: str):
-    if model_path in loaded_models:
-        return loaded_models[model_path]
-    full_path = os.path.join(MODELS_DIR, model_path)
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail=f"Model file not found: {model_path}")
-    
-    try:
-        # We try to load as JIT first, if it fails, load as normal
-        try:
-            model = torch.jit.load(full_path, map_location='cpu')
-            model.eval()
-        except:
-            data = torch.load(full_path, map_location='cpu', weights_only=False)
-            model = data  # Assuming it's a full model object for now
-            if hasattr(model, 'eval'):
-                model.eval()
-                
-        loaded_models[model_path] = model
-        return model
-    except Exception as e:
-        print(f"Failed to load {model_path}: {e}")
-        # Return none if loading failed so we can use a basic fallback purely to not crash
-        return None
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
+                   allow_methods=["*"], allow_headers=["*"])
+MODELS_DIR = Path(__file__).resolve().parent.parent
+CONTRACTS_PATH = Path(__file__).with_name("model_contracts.json")
+Shape = Literal["square", "ring", "rectangle", "ring_ro_sweep", "triangle1", "octa_resonator", "two_resonator"]
 
 class InverseRequest(BaseModel):
-    target_f_min: float
-    target_f_max: float
-    target_s11: float
-    shape_type: str
+    target_f_min: float = Field(gt=0, allow_inf_nan=False)
+    target_f_max: float = Field(gt=0, allow_inf_nan=False)
+    target_s11: float = Field(allow_inf_nan=False)
+    shape_type: Shape
 
 class ForwardRequest(BaseModel):
-    shape_type: str
-    p_value: float
+    shape_type: Shape
+    p_value: float = Field(ge=0, allow_inf_nan=False)
+
+def get_model(shape, inverse=False):
+    # Combined checkpoints explicitly name the frequency-conditioned inverse.
+    filename, section = f"{shape}.pt", "inverse_f_s11_to_p" if inverse else "forward"
+    if not inverse and (Path(MODELS_DIR) / f"fwd_ens_{shape}.pt").is_file():
+        filename, section = f"fwd_ens_{shape}.pt", "forward_ensemble"
+    path = Path(MODELS_DIR) / filename
+    if not path.is_file():
+        raise HTTPException(404, f"Model file not found: {filename}")
+    try:
+        return load_predictor(path, section, CONTRACTS_PATH)
+    except ModelUnavailable as error:
+        raise HTTPException(503, str(error)) from error
+
+def check_domain(value, lower, upper, label):
+    if not lower <= value <= upper:
+        raise HTTPException(422, f"{label} must be within the trained domain [{lower}, {upper}].")
+
+def infer(model, values):
+    try:
+        return model(values)
+    except Exception as error:
+        raise HTTPException(503, "Model inference failed; no prediction was made.") from error
 
 @app.post("/api/predict/inverse")
-async def predict_inverse(req: InverseRequest):
-    shape = req.shape_type.lower()
-    
-    # Try broadband models first if available
-    model_file = f"inv_s11_bwext_{shape}.pt"
-    if not os.path.exists(os.path.join(MODELS_DIR, model_file)):
-        model_file = f"inverse_{shape}.pt" if shape == "square" else f"inv_mdn_{shape}.pt"
-        if not os.path.exists(os.path.join(MODELS_DIR, model_file)):
-            model_file = f"inv_s11_{shape}.pt"
-    
-    model = get_model(model_file)
-    p_pred = 0.0
-    valid = False
-    
-    if model is not None and hasattr(model, '__call__'):
-        # 1. Try 3 feature tensor [f_min, f_max, target_s11]
-        try:
-            x = torch.tensor([[req.target_f_min, req.target_f_max, req.target_s11]], dtype=torch.float32)
-            with torch.no_grad():
-                out = model(x)
-            p_pred = out[0].item() if isinstance(out, (list, tuple)) else out.item()
-            valid = True
-        except Exception as e:
-            # 2. Try 2 feature tensor [f_center, target_s11] if the model wasn't trained for bandwidth
-            try:
-                f_center = (req.target_f_min + req.target_f_max) / 2.0
-                x2 = torch.tensor([[f_center, req.target_s11]], dtype=torch.float32)
-                with torch.no_grad():
-                    out2 = model(x2)
-                p_pred = out2[0].item() if isinstance(out2, (list, tuple)) else out2.item()
-                valid = True
-            except Exception as fallback_e:
-                print(f"Failed model prediction entirely: {fallback_e}")
-
-    if not valid:
-        # Fallback pseudo-prediction using center frequency
-        f_center = (req.target_f_min + req.target_f_max) / 2.0
-        p_pred = 15.0 / f_center
-    
-    return {
-        "p_optimal": p_pred,
-        "s11_expected": req.target_s11,
-        "model_used": model_file
-    }
+def predict_inverse(req: InverseRequest):
+    if req.target_f_min != req.target_f_max:
+        raise HTTPException(422, "Available inverse models take one frequency and S11, not bandwidth endpoints.")
+    if req.shape_type in ("triangle1", "octa_resonator", "two_resonator"):
+        raise HTTPException(422, "This fixed geometry has no tunable parameter for inverse design.")
+    model = get_model(req.shape_type, inverse=True)
+    r = model.ranges
+    check_domain(req.target_f_min, r["fmin"], r["fmax"], "Frequency")
+    check_domain(req.target_s11, r.get("s11_min", r.get("smin", -float("inf"))),
+                 r.get("s11_max", r.get("smax", float("inf"))), "S11")
+    p = infer(model, [[req.target_f_min, req.target_s11]])[0, 0].item()
+    check_domain(p, r["pmin"], r["pmax"], "Predicted parameter")
+    return {"p_optimal": p, "model_used": model.filename,
+            "prediction_source": "pytorch", "inference_mode": "point_inverse"}
 
 @app.post("/api/predict/forward")
-async def predict_forward(req: ForwardRequest):
-    shape = req.shape_type.lower()
-    model_file = f"fwd_ens_{shape}.pt"
-    if not os.path.exists(os.path.join(MODELS_DIR, model_file)):
-        model_file = f"models_{shape}.pt"
-        
-    model = get_model(model_file)
-    
-    # We need to return an array of frequencies and an array of S11 values
-    freqs = np.linspace(1, 20, 100).tolist()
-    s11 = []
-    valid = False
-    
-    if model is not None and hasattr(model, '__call__'):
-        try:
-            # Maybe model takes [f, p]
-            x = torch.tensor([[f, req.p_value] for f in freqs], dtype=torch.float32)
-            with torch.no_grad():
-                out = model(x)
-                s11 = out.squeeze().tolist()
-            valid = True
-        except Exception as e:
-            print("Forward model pass failed:", e)
-            
-    if not valid:
-        # Real analytical placeholder logic scaled strictly by p_value
-        fr = 15.0 / req.p_value
-        for f in freqs:
-            # simple resonance curve
-            val = -30.0 / (1 + ((f - fr)*4)**2)
-            s11.append(val)
-            
-    return {
-        "freqs": freqs,
-        "s11": s11,
-        "model_used": model_file
-    }
+def predict_forward(req: ForwardRequest):
+    model = get_model(req.shape_type)
+    r = model.ranges
+    check_domain(req.p_value, r["pmin"], r["pmax"], "Parameter")
+    freqs = np.linspace(r["fmin"], r["fmax"], 100)
+    values = np.column_stack((freqs, np.full_like(freqs, req.p_value)))
+    s11 = infer(model, values)[:, 0].tolist()
+    return {"freqs": freqs.tolist(), "s11": s11, "model_used": model.filename,
+            "prediction_source": "pytorch"}
 
 if __name__ == "__main__":
     import uvicorn
