@@ -10,7 +10,7 @@ import AutoDesignCard from './AutoDesignCard';
 import DeepLearningOptimizationBox from './DeepLearningOptimizationBox';
 import AIWorkingPanel, { useAIStages, AIWorkingInput } from './AIWorkingPanel';
 import { LoadedShape } from '@/hooks/useShapeData';
-import { absorptionFromS11, calcBandwidth, nearestPKey, aiAutoDesign } from '@/utils/math';
+import { searchResultStatus, absorptionFromS11, calcBandwidth, nearestPKey, aiAutoDesign } from '@/utils/math';
 import { Search } from 'lucide-react';
 
 interface FindBestTabProps {
@@ -175,7 +175,7 @@ const FindBestTab: React.FC<FindBestTabProps> = ({ shapes, pickAllInFreq, pickAl
                         <td className="py-2 px-3 text-right">{r.best?.p?.toFixed(4)}</td>
                         <td className="py-2 px-3 text-right">{s11Val.toFixed(2)}</td>
                         <td className="py-2 px-3 text-right">{absPct.toFixed(1)}%</td>
-                        <td className="py-2 px-3 text-center">{r.best?.pass ? '✅ PASS' : '⚠️ FAIL'}</td>
+                        <td className="py-2 px-3 text-center">{searchResultStatus(r.best)}</td>
                       </tr>
                     );
                   })}

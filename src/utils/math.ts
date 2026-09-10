@@ -35,12 +35,21 @@ export function nearestPKey(curves: CurvesByP, pVal: number): number | null {
 }
 
 export function calcBandwidth(freqs: number[], s11: number[], threshold: number = -10): { bw: number; fLo: number; fHi: number } {
-  const mask = s11.map(s => s < threshold);
-  const indices = mask.reduce((acc, v, i) => v ? [...acc, i] : acc, [] as number[]);
-  if (indices.length === 0) return { bw: 0, fLo: NaN, fHi: NaN };
-  const fLo = freqs[indices[0]];
-  const fHi = freqs[indices[indices.length - 1]];
-  return { bw: fHi - fLo, fLo, fHi };
+  // Widest contiguous sampled passing band; never bridge a failing sample.
+  let best = { bw: 0, fLo: NaN, fHi: NaN };
+  if (freqs.length !== s11.length || !Number.isFinite(threshold)) return best;
+  let start = -1;
+  for (let i = 0; i < freqs.length; i++) {
+    if (i && freqs[i] <= freqs[i - 1]) return { bw: 0, fLo: NaN, fHi: NaN };
+    if (!Number.isFinite(freqs[i]) || !Number.isFinite(s11[i]) || s11[i] > threshold) {
+      start = -1;
+      continue;
+    }
+    if (start < 0) start = i;
+    const bw = freqs[i] - freqs[start];
+    if (!Number.isFinite(best.fLo) || bw > best.bw) best = { bw, fLo: freqs[start], fHi: freqs[i] };
+  }
+  return best;
 }
 
 export interface BestAtFreqResult {
@@ -281,4 +290,13 @@ export function makeSyntheticPaperShapes(): ShapeItem[] {
   });
 
   return shapes;
+}
+
+export function searchResultStatus(best: { pass?: boolean; pass_best?: boolean; pass_all?: boolean } | null): string {
+  if (!best) return '⚠️ FAIL';
+  if ('pass_all' in best || 'pass_best' in best) {
+    if (best.pass_all) return '✅ PASS (entire range)';
+    return best.pass_best ? '✅ PASS (best point only)' : '⚠️ FAIL';
+  }
+  return best.pass ? '✅ PASS' : '⚠️ FAIL';
 }

@@ -50,7 +50,7 @@ const Index = () => {
               <span className="badge badge-blue">Forward: (Freq,P)→S11</span>
               <span className="badge badge-green">Inverse: (Freq,S11)→P</span>
               <span className="badge badge-amber">CST Brain: Auto-Design Fallback</span>
-              <span className="badge badge-purple">Blood Sensing: εr∈{1,60,68}</span>
+              <span className="badge badge-purple">Blood Sensing: εr∈{'{1,60,68}'}</span>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>

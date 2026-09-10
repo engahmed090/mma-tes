@@ -1,3 +1,4 @@
+import { splitRingGapMacro } from '@/utils/cstGeometry';
 import React, { useState, useCallback } from 'react';
 import { LoadedShape } from '@/hooks/useShapeData';
 import { absorptionFromS11, calcBandwidth, nearestPKey, rawBestAtFreq } from '@/utils/math';
@@ -188,19 +189,26 @@ function buildFullShapeSpec(shape: LoadedShape, freqGhz: number, thrDb: number) 
 /**
  * Builds a 100% syntactically-correct CST Studio Suite VBA macro for the
  * single BEST performing shape. Each CST object method is placed on its own
- * line. All geometry is fully parametric via SetParameter() calls.
+ * line. Geometry coordinates are resolved from the selected sweep value.
  *
  * @param bestShape  The single top-1 LoadedShape to export.
  * @param bestP      The optimal sweep-parameter value (mm) for that shape.
  * @param freqGhz    Target frequency in GHz.
  * @param thrDb      S11 threshold in dB.
  */
-function buildCSTMacro(
+export function buildCSTMacro(
   bestShape: LoadedShape,
   bestP: number,
   freqGhz: number,
   thrDb: number
 ): string {
+  const supported = ['square_patch', 'rect_patch', 'ring_patch_fixed_geom', 'double_split_rings'];
+  if (!supported.includes(bestShape.geometryType))
+    throw new Error(`CST export is unsupported for ${bestShape.geometryType}; no incomplete macro was generated.`);
+  if (!Number.isFinite(bestP) || (!bestShape.fixedCurve && bestP <= 0)) throw new Error('Invalid selected sweep parameter.');
+  const allowedModes = bestShape.geometryType === 'ring_patch_fixed_geom' ? ['h', 'ro', 'rin', 'fixed']
+    : bestShape.geometryType === 'double_split_rings' ? ['fixed'] : ['wm'];
+  if (!allowedModes.includes(bestShape.paramMode)) throw new Error(`Unsupported CST sweep mode: ${bestShape.paramMode}`);
   const ts = new Date().toISOString();
   const spec = buildFullShapeSpec(bestShape, freqGhz, thrDb);
   const best = spec.performance.best;
@@ -208,12 +216,20 @@ function buildCSTMacro(
 
   // Resolved numeric values (with sensible defaults)
   const uc       = dim.unitCell_mm          ?? 16;
-  const sub_h    = dim.substrateThickness_mm ?? 1.6;
+  const sub_h    = bestShape.paramMode === 'h' ? bestP : dim.substrateThickness_mm ?? 1.6;
   const patch_t  = dim.patchThickness_mm     ?? 0.035;
   const gnd_t    = dim.groundThickness_mm    ?? 0.035;
-  const subMat   = dim.substrateMaterial     ?? 'FR4';
-  const eps_r    = 4.4;  // typical FR4
-  const tan_d    = 0.02;
+  const subMat = dim.substrateMaterial;
+  const isFR4 = typeof subMat === 'string' && /^FR-?4(?:\s|$)/i.test(subMat);
+  const eps_r = bestShape.fixed.substrate_eps_r ?? (isFR4 ? 4.4 : undefined);
+  const tan_d = bestShape.fixed.substrate_tan_delta ?? (isFR4 ? 0.02 : undefined);
+  if (!subMat || /["\r\n]/.test(subMat) || !Number.isFinite(eps_r) || eps_r <= 0 || !Number.isFinite(tan_d) || tan_d < 0)
+    throw new Error(`CST export needs substrate_eps_r and substrate_tan_delta for material "${subMat ?? 'unspecified'}"; FR-4 will not be substituted.`);
+  if (bestShape.paramMode === 'ro') dim.ringOuterRadius_mm = bestP;
+  if (bestShape.paramMode === 'rin') dim.ringInnerRadius_mm = bestP;
+  if (bestShape.geometryType === 'ring_patch_fixed_geom' &&
+      !(Number.isFinite(dim.ringOuterRadius_mm) && Number.isFinite(dim.ringInnerRadius_mm) && dim.ringOuterRadius_mm > dim.ringInnerRadius_mm && dim.ringInnerRadius_mm >= 0))
+    throw new Error('CST ring requires explicit outer radius > inner radius >= 0.');
 
   // Derived geometry — Z-axis stack-up:
   //   Ground  : -(sub_h+gnd_t)  →  -sub_h
@@ -261,7 +277,7 @@ function buildCSTMacro(
     L(`'           e) Set the solver frequency range.`),
     L(`'           f) Show a confirmation dialog when finished.`),
     L(`' STEP 6 : After the macro runs, open the Parameter List (Home → Parameters)`),
-    L(`'           to inspect and adjust any dimension before re-running the solver.`),
+    L(`'           to inspect values. Regenerate this export to change geometry coordinates.`),
     L(`' NOTE   : Requires CST Studio Suite 2019 or newer.`),
     L(`'`),
     L(`' ================================================================`),
@@ -272,7 +288,7 @@ function buildCSTMacro(
     L(``),
     L(`    ' ── STEP 1: Set parametric variables ─────────────────────────`),
     L(`    ' All dimensions in millimetres (mm).`),
-    L(`    ' You can edit these values and re-run the macro at any time.`),
+    L(`    ' Coordinates below are resolved at export time; regenerate to change the sweep value.`),
     L(`    StoreParameter "P",       "${bestP}"`),
     L(`    StoreParameter "UC",      "${uc}"`),
     L(`    StoreParameter "sub_h",   "${sub_h}"`),
@@ -344,7 +360,7 @@ function buildCSTMacro(
   lines.push(L(`    ' ── STEP 3: Define substrate material ───────────────────────`));
   lines.push(L(`    With Material`));
   lines.push(L(`        .Reset`));
-  lines.push(L(`        .Name "FR-4 (lossy)"`));
+  lines.push(L(`        .Name "${subMat}"`));
   lines.push(L(`        .Folder ""`));
   lines.push(L(`        .FrqType "all"`));
   lines.push(L(`        .Type "Normal"`));
@@ -392,7 +408,7 @@ function buildCSTMacro(
   lines.push(L(`        .Reset`));
   lines.push(L(`        .Name "Substrate"`));
   lines.push(L(`        .Component "Component1"`));
-  lines.push(L(`        .Material "FR-4 (lossy)"`));
+  lines.push(L(`        .Material "${subMat}"`));
   lines.push(L(`        .Xrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Yrange "-${halfUC}", "${halfUC}"`));
   lines.push(L(`        .Zrange "${zSubBot}", "${zSubTop}"`));
@@ -455,8 +471,11 @@ function buildCSTMacro(
       [dim.ring1OuterRadius_mm, dim.ring1InnerRadius_mm, 'Ring1'],
       [dim.ring2OuterRadius_mm, dim.ring2InnerRadius_mm, 'Ring2'],
     ];
-    pairs.forEach(([ro, ri, name]) => {
-      if (ro === null) return;
+    const centers = dim.gapCenters_deg;
+    if (!Array.isArray(centers) || centers.length !== 2 || !centers.every(Number.isFinite))
+      throw new Error('Double split rings require two explicit gap centers.');
+    pairs.forEach(([ro, ri, name], index) => {
+      if (!(Number.isFinite(ro) && Number.isFinite(ri) && ro > ri && ri >= 0)) throw new Error('Invalid split-ring radii.');
       const roS = (ro as number).toFixed(6);
       const riS = ((ri ?? 0) as number).toFixed(6);
       lines.push(L(`    With Cylinder`));
@@ -474,6 +493,7 @@ function buildCSTMacro(
       lines.push(L(`        .Segments "0"`));
       lines.push(L(`        .Create`));
       lines.push(L(`    End With`));
+      lines.push(...splitRingGapMacro(name, ro, centers[index], dim.gapWidth_deg, patch_t));
     });
 
   } else if (gt === 'plus_cross_patch' || gt === 'arrow_square_circle') {
@@ -806,7 +826,7 @@ const FORMAT_CARDS: FormatCard[] = [
     id: 'cst',
     icon: <Code2 className="w-6 h-6" />,
     label: 'CST Macro Script (.bas)',
-    description: 'Exports the single BEST-performing shape as a fully parametric CST Studio Suite VBA macro. Includes step-by-step usage instructions, SetParameter calls for all dimensions, Floquet port & solver config. Import → Run in CST to build the geometry instantly.',
+    description: 'Exports the selected best shape at its selected sweep value. Unsupported geometry or missing material properties produce an error. Inspect the generated macro in CST before simulation.',
     ext: 'bas',
     mime: 'text/plain',
     color: 'from-orange-900/40 to-orange-800/20',
@@ -911,7 +931,8 @@ const ExportTab: React.FC<ExportTabProps> = ({ shapes, pickAllInFreq }) => {
       triggerDownload(content, filename, card.mime);
       setDownloadState(fmt, 'done');
       setTimeout(() => setDownloadState(fmt, 'idle'), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      setValidationLog(logs => [...logs, { ok: false, message: err instanceof Error ? err.message : 'Export failed.' }]);
       setDownloadState(fmt, 'error');
       setTimeout(() => setDownloadState(fmt, 'idle'), 4000);
     }
@@ -930,8 +951,8 @@ const ExportTab: React.FC<ExportTabProps> = ({ shapes, pickAllInFreq }) => {
         : content;
       setPreviewText(displayText);
       setPreviewFormat(fmt);
-    } catch {
-      setPreviewText('Error generating preview.');
+    } catch (error) {
+      setPreviewText(error instanceof Error ? error.message : 'Error generating preview.');
       setPreviewFormat(fmt);
     }
   }, [validateAndBuild]);
@@ -1114,10 +1135,10 @@ const ExportTab: React.FC<ExportTabProps> = ({ shapes, pickAllInFreq }) => {
             padding: '1rem',
           }}>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              {[['Select All', selectAll], ['Deselect All', deselectAll]].map(([label, fn]) => (
+              {([{ label: 'Select All', fn: selectAll }, { label: 'Deselect All', fn: deselectAll }]).map(({ label, fn }) => (
                 <button
                   key={label}
-                  onClick={fn as () => void}
+                  onClick={fn}
                   style={{
                     padding: '0.25rem 0.7rem', borderRadius: '0.375rem',
                     border: '1px solid hsl(217 33% 30%)',

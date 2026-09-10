@@ -7,36 +7,8 @@ import {
   Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
-// ─── VNA Data Types ────────────────────────────────────────────────────────
-interface VNAPoint { freq: number; s11: number; }
-
+import { parseVNAFile, VNAPoint } from '@/utils/vna';
 const VNA_STORAGE_KEY = 'vna_real_data_v1';
-
-// ─── VNA Parser ───────────────────────────────────────────────────────────────
-function parseVNAFile(text: string): VNAPoint[] | null {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  const points: VNAPoint[] = [];
-  let freqScale = 1.0; // assume GHz by default
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    // Detect MHz header hint
-    if (/MHz/i.test(trimmed)) { freqScale = 1e-3; continue; }
-    if (/GHz/i.test(trimmed) || /Freq/i.test(trimmed) || trimmed.startsWith('!') || trimmed.startsWith('#')) continue;
-
-    const parts = trimmed.split(/[\s,;]+/);
-    if (parts.length < 2) continue;
-    const f = parseFloat(parts[0]);
-    const s = parseFloat(parts[1]);
-    if (isNaN(f) || isNaN(s)) continue;
-
-    // Auto-detect MHz (frequency > 1000 likely means MHz)
-    const freqGhz = f > 100 ? f * 1e-3 : f > 1000 ? f * 1e-6 : f * freqScale;
-    points.push({ freq: parseFloat(freqGhz.toFixed(4)), s11: parseFloat(s.toFixed(3)) });
-  }
-  return points.length >= 2 ? points : null;
-}
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
 const SAMPLE_LABELS: Record<number, string> = { 1: 'Air', 60: 'Normal Blood', 68: 'Cancer Blood' };
@@ -113,9 +85,10 @@ const DNNPredictorTab: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const pts = parseVNAFile(text);
-      if (!pts) {
-        setVnaError('Could not parse file. Expected two columns: frequency and S11 (dB).');
+      let pts: VNAPoint[];
+      try { pts = parseVNAFile(text, file.name); }
+      catch (error) {
+        setVnaError(error instanceof Error ? error.message : 'Could not parse VNA data.');
         return;
       }
       setVnaData(pts);
@@ -345,9 +318,9 @@ const DNNPredictorTab: React.FC = () => {
         <div className="text-xs text-muted-foreground space-y-1 font-mono bg-muted/30 rounded-lg p-3">
           <p className="font-semibold text-foreground mb-1">Accepted formats:</p>
           <p>• Two-column CSV: <span className="text-primary">freq_GHz, S11_dB</span></p>
-          <p>• Tab-separated TXT: <span className="text-primary">freq  S11</span></p>
-          <p>• Touchstone .s1p (re-save as .txt first)</p>
-          <p>• Auto-detects MHz (values &gt; 100 are treated as MHz → converted to GHz)</p>
+          <p>• Tab-separated TXT: <span className="text-primary">freq_MHz  S11_dB</span></p>
+          <p>• Touchstone 1.x .s1p: S parameters in DB, MA, or RI format</p>
+          <p>• Explicit Hz, kHz, MHz, or GHz units required; unsupported formats are rejected</p>
         </div>
 
         {/* Upload button */}
