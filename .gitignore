@@ -31,3 +31,8 @@ dist-ssr
 .pnpm-store/
 __pycache__/
 .pytest_cache/
+
+# Private environment files; the tracked .env contains public frontend config only.
+.env
+.env.*
+!.env.example

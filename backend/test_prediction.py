@@ -92,3 +92,36 @@ def test_ensemble_decodes_each_member(checkpoint):
     torch.save(data, path / "fwd_ens_ring.pt")
     model = load_predictor(path / "fwd_ens_ring.pt", "forward_ensemble", path / "absent.json")
     assert model([[3., 6.]]).item() == 12.
+
+def test_health_does_not_claim_model_readiness():
+    response = TestClient(main.app).get("/api/health")
+    assert response.json() == {"status": "ok", "model_readiness": "checked_per_request"}
+
+def test_browser_contract_and_cors():
+    client = TestClient(main.app)
+    response = client.options("/api/predict/inverse", headers={"Origin": "http://127.0.0.1:8080", "Access-Control-Request-Method": "POST"})
+    assert response.status_code == 200
+    response = client.options("/api/predict/inverse", headers={"Origin": "https://unconfigured.example", "Access-Control-Request-Method": "POST"})
+    assert response.status_code == 400
+    response = client.post("/api/predict/inverse", json={"shape_type": "square", "target_f_min": 10, "target_f_max": 10, "target_s11": -10})
+    assert response.status_code == 503
+    assert set(response.json()) == {"detail"}
+    assert "missing verified inference contract" in response.json()["detail"]
+
+@pytest.mark.skipif(__import__("os").getenv("RUN_LOCAL_INTEGRATION") != "1", reason="requires Vite :8080 and API :8000")
+def test_live_frontend_proxy():
+    import json
+    import urllib.request
+    import urllib.error
+    with urllib.request.urlopen("http://127.0.0.1:8080/api/health") as response:
+        assert json.load(response)["status"] == "ok"
+    for endpoint, payload in [("inverse", {"shape_type": "square", "target_f_min": 10, "target_f_max": 10, "target_s11": -10}),
+                              ("forward", {"shape_type": "ring", "p_value": 2})]:
+        request = urllib.request.Request("http://127.0.0.1:8080/api/predict/" + endpoint,
+            data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request)
+        assert caught.value.code == 503
+        result = json.load(caught.value)
+        assert set(result) == {"detail"}
+        assert "missing verified inference contract" in result["detail"]

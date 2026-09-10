@@ -1,73 +1,136 @@
-# Welcome to your Lovable project
+# MMA project: local setup and readiness
 
-## Project info
+React/Vite frontend, FastAPI/PyTorch prediction service, and separate optional
+Supabase chat and Streamlit services. This repository is not research-validated.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Frontend
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Validated with Node 24.19 and pnpm 11.19.0. Install that pnpm version, then:
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-**Edit a file directly in GitHub**
+Open http://127.0.0.1:8080. The dev server binds to loopback and proxies `/api`
+to http://127.0.0.1:8000. The checked-in lockfile records the installed dependency
+graph; no dependency version upgrades were requested for Stage 3. pnpm may ask
+for dependency build-script approval: review esbuild and @swc/core before allowing
+those build tools. Do not approve unrelated scripts blindly.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Backend (second terminal)
 
-**Use GitHub Codespaces**
+Validated on Windows with Python 3.12 and CPU PyTorch. From the repository root:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```sh
+python -m venv .venv
+# Windows PowerShell: .venv/Scripts/Activate.ps1
+# macOS/Linux: source .venv/bin/activate
+python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r backend/requirements-dev.txt -c backend/constraints-tested.txt
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
 
-## What technologies are used for this project?
+`requirements.txt` pins direct runtime packages; `requirements-dev.txt` adds tests.
+`constraints-tested.txt` captures the validated environment's transitive versions.
+It is a Windows/Python 3.12 snapshot, not a universal cross-platform lock. For GPU
+or other Python/platform versions, select a compatible official PyTorch wheel and
+validate separately. Gunicorn was removed from the core requirements because it
+is not used by this project and is not a Windows server requirement.
 
-This project is built with:
+## Configuration and secrets
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Copy `.env.example` to `.env.local` only for overrides. The tracked `.env` contains
+public Supabase browser configuration; preserve it unless intentionally switching
+projects. Commented example Supabase entries do not override it with blank values.
 
-## How can I deploy this project?
+| Variable | Where | Default / purpose |
+| --- | --- | --- |
+| VITE_PREDICTION_API_URL | Vite env | Empty: same-origin `/api`; optional absolute HTTP(S) service base |
+| VITE_STREAMLIT_URL | Vite env | Empty: live twin disabled; set only for a separately running service |
+| VITE_SUPABASE_URL | Vite env | Existing public project URL; used by chat |
+| VITE_SUPABASE_PUBLISHABLE_KEY | Vite env | Public client key; never a service-role key |
+| VITE_SUPABASE_PROJECT_ID | Vite env | Public project identifier |
+| PREDICTION_PROXY_TARGET | Shell running Vite | http://127.0.0.1:8000; development only |
+| CORS_ORIGINS | Backend shell | Comma-separated localhost/127.0.0.1 frontend origins on port 8080 |
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+VITE_* values are embedded in browser bundles and are never secret. Keep private
+keys in server-side secret stores or ignored environment files. Backend settings
+are read from the process environment, not automatically from a dotenv file.
+Restart Vite after changing variables. Production static hosting needs a reverse
+proxy for `/api`, or an explicit API URL plus matching backend CORS configuration.
+There is no automatic production localhost fallback. Vite preview is a static
+build preview, not the backend or a production API proxy.
 
-## Can I connect a custom domain to my Lovable project?
+## API contracts and integration
 
-Yes, you can!
+- GET `/api/health`: service liveness only; does not claim model readiness.
+- POST `/api/predict/inverse`: `{shape_type, target_f_min, target_f_max, target_s11}`.
+  Canonical shape names match the dataset configurations. Frequency endpoints must
+  be equal: this is a point inverse, not a broadband optimizer.
+- Genuine inverse success: `{p_optimal, model_used, prediction_source:"pytorch",
+  inference_mode:"point_inverse"}`. The frontend rejects unverified responses.
+- POST `/api/predict/forward`: `{shape_type, p_value}`; genuine success contains
+  `{freqs, s11, model_used, prediction_source:"pytorch"}` over the trained domain.
+- Invalid requests return 422; missing model files 404; unavailable metadata or
+  failed inference 503. Errors contain `detail`, never synthetic prediction fields.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+With both services running, request `/api/health` through port 8080, then POST an
+inverse request for square, 10 GHz, -10 dB. The expected current result is **503**
+with a missing verified inference contract message. This verifies transport and
+honest unavailability; it is not a successful scientific prediction.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Models and training prerequisites
+
+See [backend/PREDICTION_MODELS.md](backend/PREDICTION_MODELS.md). Absorber checkpoint
+activations are missing and original absorber trainers are absent. Real absorber
+inference must remain disabled until source-backed metadata is supplied. Do not
+infer activations from layer shapes, retrain to conceal missing metadata, or use
+synthetic results as model output.
+
+The browser blood-sensing JSON model is separate. `ml_pipeline/train_dnn.py`
+requires NumPy and the three original blood CST datasets identified in that script.
+It contains a metrics-derived fallback: verify all raw inputs exist before training
+for research. To experiment without replacing bundled weights, choose another output:
+
+```sh
+python ml_pipeline/train_dnn.py --data-dir . --out training-output --epochs 800
+```
+
+Do not run `train_hybrid_vna.py` against the current blood model without reconciling
+its older geometry/scaler assumptions. `blood_sensing_pipeline.py` is a separate
+pipeline, not evidence for absorber architectures. Training has not been run in
+this readiness work; no checkpoints, datasets or reported accuracy were changed.
+
+## Validation
+
+```sh
+pnpm typecheck
+pnpm test
+python -m pytest backend/test_prediction.py -q
+pnpm build
+git diff --check
+```
+
+With both local servers running, set `RUN_LOCAL_INTEGRATION=1` in the test shell
+and run the backend suite to include the live frontend-proxy test. It is otherwise
+skipped. This smoke test expects the current disabled model state.
+
+Tests cover real browser JSON decoding, API failure contracts, known test-only
+checkpoint reconstruction, VNA formats, contiguous bandwidth, and CST export
+commands. Test fixtures are not scientific datasets or accuracy measurements.
+
+## Remaining production/research gates
+
+- Verify absorber trainer metadata and then validate actual inference against
+  independent reference outputs and held-out measured data.
+- Existing literature/auto-design and other illustrative scientific paths remain
+  in the project; audit provenance before using any outputs as research evidence.
+- CST macros have not been executed in CST. Unsupported geometry and missing
+  substrate properties are rejected; existing FR-4 defaults are not measurements.
+- Configure and independently validate Supabase access policies/chat secrets and
+  the external Streamlit app. They are not supplied by the local backend.
+- Add deployment authentication, request/resource limits, HTTPS and monitoring
+  before exposing compute publicly. CORS is not authentication.
+- Production build still warns about the large frontend bundle. Dependency
+  deprecation warnings remain; no broad dependency upgrade was performed.

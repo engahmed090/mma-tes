@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Literal
 import numpy as np
@@ -10,11 +11,16 @@ except ImportError:
     from model_runtime import ModelUnavailable, load_predictor
 
 app = FastAPI(title="Generative AI Backend for Absorbers")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
+app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://127.0.0.1:8080,http://localhost:8080").split(",") if origin.strip()], allow_credentials=False,
                    allow_methods=["*"], allow_headers=["*"])
 MODELS_DIR = Path(__file__).resolve().parent.parent
 CONTRACTS_PATH = Path(__file__).with_name("model_contracts.json")
 Shape = Literal["square", "ring", "rectangle", "ring_ro_sweep", "triangle1", "octa_resonator", "two_resonator"]
+
+@app.get("/api/health")
+def health():
+    # Liveness only: this does not assert that any model is ready.
+    return {"status": "ok", "model_readiness": "checked_per_request"}
 
 class InverseRequest(BaseModel):
     target_f_min: float = Field(gt=0, allow_inf_nan=False)

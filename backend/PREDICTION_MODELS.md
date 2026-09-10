@@ -58,6 +58,6 @@ Tests reconstruct a known test checkpoint and verify normalization, routing,
 error responses and safe deserialization of bundled checkpoints. They do not
 claim scientific validation of the absorber weights without their trainer.
 
-For a locally running backend, set `VITE_PREDICTION_API_URL=http://127.0.0.1:8000`
-in an ignored `.env.local`, then restart Vite. The existing hosted URL remains
-the default; its old unverified responses are intentionally rejected.
+Local development uses same-origin `/api` with Vite proxying to port 8000.
+Set `VITE_PREDICTION_API_URL` only for an explicit alternate service; there is no
+hardcoded hosted fallback. See the root README for setup and production routing.

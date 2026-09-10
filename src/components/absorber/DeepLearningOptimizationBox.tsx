@@ -1,3 +1,4 @@
+import { predictionApiBase } from '@/lib/serviceConfig';
 import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
@@ -24,7 +25,7 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${import.meta.env.VITE_PREDICTION_API_URL || 'https://ahmedeng090-mma-backend.hf.space'}/api/predict/inverse`, {
+        const res = await fetch(`${predictionApiBase}/api/predict/inverse`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -79,7 +80,7 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
 
         {loading && (
           <p className="flex items-center gap-2 text-muted-foreground mt-3">
-            <Loader2 className="w-4 h-4 animate-spin" /> Querying Hugging Face PyTorch backend...
+            <Loader2 className="w-4 h-4 animate-spin" /> Querying configured PyTorch backend...
           </p>
         )}
 

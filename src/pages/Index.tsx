@@ -1,3 +1,4 @@
+import { streamlitBase } from '@/lib/serviceConfig';
 import React, { useState } from 'react';
 import { useShapeData } from '@/hooks/useShapeData';
 import FindBestTab from '@/components/absorber/FindBestTab';
@@ -147,15 +148,15 @@ const Index = () => {
                         bioSubTab === 'streamlit' ? 'block' : 'hidden'
                       }`}
                     >
-                      <iframe
-                        src="https://meta-biosensor.streamlit.app/?embed=true"
+                      {streamlitBase ? <iframe
+                        src={`${streamlitBase}/?embed=true`}
                         width="100%"
                         height="100%"
                         frameBorder="0"
                         title="Meta Biosensor Live Twin"
                         style={{ border: 'none', width: '100%', height: '100%' }}
                         className="w-full h-full"
-                      />
+                      /> : <p className="p-6">Live twin is not configured. Set VITE_STREAMLIT_URL to enable it.</p>}
                     </div>
                   </div>
                 </div>
