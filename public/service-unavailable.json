@@ -1,0 +1,3 @@
+{
+  "detail": "Prediction backend is not configured on this static deployment. Experimental saving, training and inference require the local research application; no prediction was made."
+}

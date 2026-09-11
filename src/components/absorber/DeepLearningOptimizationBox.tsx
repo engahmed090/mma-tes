@@ -36,7 +36,7 @@ const DeepLearningOptimizationBox: React.FC<DeepLearningOptimizationBoxProps> = 
           }),
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => { throw new Error('Prediction backend is unavailable or not configured; no prediction was made.'); });
         if (!res.ok) {
           throw new Error(typeof data.detail === 'string' ? data.detail : `API Error: ${res.statusText}`);
         }

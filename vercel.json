@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npx --yes pnpm@11.19.0 install --frozen-lockfile --ignore-scripts",
+  "buildCommand": "npx --yes pnpm@11.19.0 run build",
+  "outputDirectory": "dist",
+  "routes": [
+    {
+      "src": "/api(?:/.*)?",
+      "dest": "/service-unavailable.json",
+      "status": 503
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
+  ]
+}

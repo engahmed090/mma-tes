@@ -64,10 +64,15 @@ export function digitize(corners: Pixel[], trace: Pixel[], calibration: Calibrat
   if(points.some((p,i)=>i>0&&p.freq-points[i-1].freq<1e-12)) throw new Error('Duplicate trace frequencies; undo and select one curve value per frequency.');
   return points;
 }
+export function assertLocalExperimentalAccess(hostname: string = window.location.hostname) {
+  if (!['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname))
+    throw new Error('Local research backend unavailable on this hosted site. Import and preview work in your browser; saving, training and inference require running the application locally. No experimental measurements were sent.');
+}
 export async function localAPI(path: string, body?: unknown) {
+  assertLocalExperimentalAccess();
   // Intentionally same-origin local backend: never uses the external chat endpoint.
   const response=await fetch('/api/experimental/'+path,body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : undefined);
-  const data=await response.json();
+  const data=await response.json().catch(()=>{throw new Error('Local research backend unavailable. Start the local FastAPI backend; no result was returned.');});
   if(!response.ok) throw new Error(typeof data.detail==='string' ? data.detail : JSON.stringify(data.detail));
   return data;
 }

@@ -156,3 +156,10 @@ image digitization, anonymous specimen groups, dataset snapshots and NumPy basel
 training. See [EXPERIMENTAL_LAB.md](EXPERIMENTAL_LAB.md) for setup, privacy, schemas,
 validation gates and limitations. Experimental files live in ignored
 `experimental-data/` and are never sent to chat. This is not a diagnostic system.
+
+## Vercel production
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the master production branch, pinned build
+commands, SPA routing, environment configuration and deployment-SHA verification.
+The hosted lab supports browser import/preview; experimental saving, training and
+inference remain local-only and are blocked before transmitting data from a hosted page.
