@@ -24,8 +24,9 @@ const ReportTab: React.FC<ReportTabProps> = ({ shapes, pickAllInFreq }) => {
       `**Target frequency:** ${repFreq.toFixed(3)} GHz  |  **S11 threshold:** ${repThr.toFixed(1)} dB`,
       `**Total shapes evaluated:** ${shapes.length}  |  **Results found:** ${results.length}`,
       '',
+      'Source types are shown per row. Absorption assumes S21=0; bandwidth is the widest contiguous sampled passing band. Not experimental validation.',
       '## Summary Table',
-      '| Rank | Shape | Source | Best P (mm) | S11 (dB) | Absorption | BW (-10dB) | Status |',
+      `| Rank | Shape | Source | Best P (mm) | S11 (dB) | Absorption | BW (${repThr} dB) | Status |`,
       '|------|-------|--------|-------------|----------|------------|------------|--------|',
     ];
 
@@ -35,7 +36,7 @@ const ReportTab: React.FC<ReportTabProps> = ({ shapes, pickAllInFreq }) => {
     for (let idx = 0; idx < results.length; idx++) {
       const r = results[idx];
       const name = r.item.displayName.slice(0, 40);
-      const src = r.item.isReal ? 'CST Raw' : 'Literature';
+      const src = r.item.isReal ? 'CST simulation' : 'SYNTHETIC / DEMONSTRATION DATA';
       const pBest = r.best.p;
       const s11Val = r.best.s11_db ?? r.best.best_db ?? NaN;
       const absPct = (absorptionFromS11(s11Val) as number) * 100;
@@ -53,7 +54,7 @@ const ReportTab: React.FC<ReportTabProps> = ({ shapes, pickAllInFreq }) => {
 
     lines.push('', '## All Loaded Shapes');
     for (const s of shapes) {
-      lines.push(`- **${s.displayName}** [${s.ranges.fmin.toFixed(1)}–${s.ranges.fmax.toFixed(1)} GHz] ${s.isReal ? '(CST trained)' : '(Literature)'}`);
+      lines.push(`- **${s.displayName}** [${s.ranges.fmin.toFixed(1)}–${s.ranges.fmax.toFixed(1)} GHz] ${s.isReal ? '(CST simulation)' : '(SYNTHETIC / DEMONSTRATION DATA)'}`);
     }
 
     setReportMd(lines.join('\n'));
@@ -70,7 +71,7 @@ const ReportTab: React.FC<ReportTabProps> = ({ shapes, pickAllInFreq }) => {
   return (
     <div className="space-y-6 tab-content-enter">
       <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-        <FileText className="w-5 h-5 text-primary" /> Thesis-Ready Report Generator
+        <FileText className="w-5 h-5 text-primary" /> Draft Simulation Report Generator
       </h2>
       <p className="text-sm text-muted-foreground">
         Generate a structured report with all loaded shapes, their performance, and design parameters.

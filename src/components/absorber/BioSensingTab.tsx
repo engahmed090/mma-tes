@@ -1,10 +1,10 @@
 /**
- * BioSensingTab.tsx — Virtual AI Laboratory (Blood-Cancer Biosensor)
+ * BioSensingTab.tsx — Analytical Sensing Model (Blood-Cancer Biosensor)
  *
  * STRICT CONSTRAINTS:
  *  - Patch Width slider: 10.0 – 14.0 mm, step 0.5
  *  - Graph X-axis: strictly 1.0 – 5.0 GHz
- *  - 3 DNN prediction curves: Air, Normal Blood, Cancer Blood
+ *  - 3 analytical demonstration curves: Air, Normal Blood, Cancer Blood
  *  - Manual VNA input → localStorage → plotted as scatter dots
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -14,7 +14,7 @@ import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { predictS11Curve } from '@/data/bloodSensingData';
+import { analyticalS11Curve } from '@/data/bloodSensingData';
 import { RESONANCE_DATA, KPIS, SENSITIVITY_TABLE } from '@/data/bloodSensingData';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -81,11 +81,11 @@ const BioSensingTab: React.FC = () => {
   // Load VNA points from localStorage on mount
   useEffect(() => { setVnaPoints(loadVNA()); }, []);
 
-  // ── Compute 3 DNN prediction curves (physics-based Lorentzian model) ────────
+  // ── Compute 3 analytical demonstration curves (physics-based Lorentzian model) ────────
   const { airCurve, normalCurve, cancerCurve } = useMemo(() => {
-    const air    = predictS11Curve(wMm, 1.0,  FREQ_POINTS);
-    const normal = predictS11Curve(wMm, 60.0, FREQ_POINTS);
-    const cancer = predictS11Curve(wMm, 68.0, FREQ_POINTS);
+    const air    = analyticalS11Curve(wMm, 1.0,  FREQ_POINTS);
+    const normal = analyticalS11Curve(wMm, 60.0, FREQ_POINTS);
+    const cancer = analyticalS11Curve(wMm, 68.0, FREQ_POINTS);
     return { airCurve: air, normalCurve: normal, cancerCurve: cancer };
   }, [wMm]);
 
@@ -99,11 +99,10 @@ const BioSensingTab: React.FC = () => {
     }));
   }, [airCurve, normalCurve, cancerCurve]);
 
-  // VNA scatter data: map each VNA point to {freq, vna_s11} using air curve
+  // User-reported frequency markers; amplitude is unavailable.
   const vnaScatterData = useMemo(() => {
     return vnaPoints.map(pt => ({
       freq: parseFloat(pt.measured_ghz.toFixed(4)),
-      vna: -10, // plot as a horizontal reference marker at -10 dB level
       label: pt.label || `${pt.baseline_ghz} GHz + ${pt.shift_mhz} MHz`,
     }));
   }, [vnaPoints]);
@@ -166,7 +165,7 @@ const BioSensingTab: React.FC = () => {
           <Brain className="w-6 h-6 text-primary" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-foreground">🧬 Virtual AI Laboratory</h2>
+          <h2 className="text-xl font-bold text-foreground">🧬 Analytical Sensing Model</h2>
           <p className="text-xs text-muted-foreground">
             Blood Cancer Biosensor · Patch Width 10–14 mm · Freq 1–5 GHz · ε_r ∈ {'{'}1, 60, 68{'}'}
           </p>
@@ -204,10 +203,11 @@ const BioSensingTab: React.FC = () => {
         <p className="text-xs text-muted-foreground mt-1">Range: 10.0 – 14.0 mm · Step: 0.5 mm</p>
       </div>
 
+      <p role="note" className="text-sm text-muted-foreground">Analytical demonstration using unverified baseline parameters. Not a neural-network prediction, measured response, or validated cancer diagnostic. Model accuracy: Unavailable. Absorption estimates assume zero transmission.</p>
       {/* ── S11 Chart: 1–5 GHz, 3 curves ──────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-secondary/10 p-4">
         <h3 className="text-sm font-semibold text-foreground mb-4">
-          S₁₁ Prediction — w = {wMm.toFixed(1)} mm · Domain: 1.0–5.0 GHz
+          Analytical S₁₁ Reference — w = {wMm.toFixed(1)} mm · Domain: 1.0–5.0 GHz
         </h3>
         <ResponsiveContainer width="100%" height={380}>
           <ComposedChart data={chartData} margin={{ top: 5, right: 25, left: 0, bottom: 20 }}>
@@ -235,7 +235,7 @@ const BioSensingTab: React.FC = () => {
                   air: 'Air (No Blood)',
                   normal: 'Normal Blood',
                   cancer: 'Blood Cancer',
-                  vna: '📡 VNA Measurement',
+                  vna: '📡 User-entered frequency marker; S11 not measured',
                 };
                 return [`${Number(val).toFixed(2)} dB`, labels[name] || name];
               }}
@@ -245,7 +245,7 @@ const BioSensingTab: React.FC = () => {
                 air: 'Air (ε_r=1)',
                 normal: 'Normal Blood (ε_r=60)',
                 cancer: 'Blood Cancer (ε_r=68)',
-                vna: '📡 VNA Manual Points',
+                vna: '📡 User-entered frequency markers (−10 dB is display position)',
               }[value] || value)}
             />
             <ReferenceLine y={-10} stroke="#ef444440" strokeDasharray="4 4"
@@ -261,16 +261,9 @@ const BioSensingTab: React.FC = () => {
             <Line type="monotone" dataKey="cancer" dot={false} strokeWidth={2.5}
               stroke={CURVE_COLORS.cancer_blood} isAnimationActive={false} />
 
-            {/* VNA manual points as scatter dots */}
-            {vnaScatterData.length > 0 && (
-              <Scatter
-                name="vna"
-                data={vnaScatterData}
-                dataKey="vna"
-                fill={CURVE_COLORS.vna}
-                shape={<VNADot />}
-              />
-            )}
+            {/* User-reported frequencies only: no S11 amplitude was measured here. */}
+            {vnaScatterData.map((point, index) => <ReferenceLine key={index} x={point.freq}
+              stroke={CURVE_COLORS.vna} strokeDasharray="3 3" label="User-entered frequency (unverified)" />)}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -298,7 +291,7 @@ const BioSensingTab: React.FC = () => {
       {/* ── KPI Table ──────────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="px-4 py-2 bg-secondary/30 border-b border-border text-xs font-semibold text-foreground">
-          Sensitivity Table (from CST Real Data, w=10mm baseline)
+          Sensitivity — unavailable (original source data not verified)
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs font-mono">
@@ -314,8 +307,8 @@ const BioSensingTab: React.FC = () => {
                 <tr key={i} className="border-t border-border/40 hover:bg-secondary/10 transition-colors">
                   <td className="px-4 py-2 font-semibold" style={{ color: row.color }}>{row.sample}</td>
                   <td className="px-4 py-2 text-muted-foreground">{row.eps_r}</td>
-                  <td className="px-4 py-2 text-foreground">{row.fr_ghz.toFixed(4)}</td>
-                  <td className="px-4 py-2 text-foreground">{row.delta_fr_mhz > 0 ? '+' : ''}{row.delta_fr_mhz}</td>
+                  <td className="px-4 py-2 text-foreground">{'Unavailable'}</td>
+                  <td className="px-4 py-2 text-foreground">{'Unavailable'}</td>
                   <td className="px-4 py-2 text-foreground">{row.sensitivity}</td>
                 </tr>
               ))}
@@ -330,7 +323,7 @@ const BioSensingTab: React.FC = () => {
           <FlaskConical className="w-5 h-5 text-yellow-400" />
           <h3 className="text-base font-bold text-foreground">Manual VNA Input</h3>
           <span className="text-xs text-muted-foreground ml-1">
-            Type measured frequency shift → saved to localStorage → plotted as ◆ dots
+            User-entered, unverified frequency shifts. Vertical markers show frequency only; no S11 measurement is inferred.
           </span>
         </div>
 
@@ -394,7 +387,7 @@ const BioSensingTab: React.FC = () => {
         {/* Computed preview */}
         {inputBaseline && inputShift && !isNaN(parseFloat(inputBaseline)) && !isNaN(parseFloat(inputShift)) && (
           <div className="text-xs font-mono text-yellow-300 bg-yellow-500/10 rounded-lg px-3 py-2">
-            → Measured frequency: {(parseFloat(inputBaseline) + parseFloat(inputShift) / 1000).toFixed(6)} GHz
+            → User-entered derived frequency: {(parseFloat(inputBaseline) + parseFloat(inputShift) / 1000).toFixed(6)} GHz
           </div>
         )}
 

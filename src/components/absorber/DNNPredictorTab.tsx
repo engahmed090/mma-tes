@@ -144,8 +144,8 @@ const DNNPredictorTab: React.FC = () => {
         </div>
         {modelMeta && (
           <div className="ml-auto flex gap-3 text-xs font-mono text-muted-foreground">
-            <span className="badge badge-blue">RMSE {modelMeta.rmse.toFixed(3)} dB</span>
-            <span className="badge badge-green">R² {modelMeta.r2.toFixed(4)}</span>
+            <span className="badge badge-blue">Reported fit RMSE {modelMeta.rmse.toFixed(3)} dB</span>
+            <span className="badge badge-green">Reported fit R² {modelMeta.r2.toFixed(4)}</span>
             <span className="badge badge-amber">{(modelMeta.n / 1000).toFixed(1)}k pts</span>
           </div>
         )}
@@ -165,7 +165,7 @@ const DNNPredictorTab: React.FC = () => {
             <p className="font-semibold text-destructive">Model not loaded</p>
             <p className="text-muted-foreground mt-0.5">{error}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Run <code className="bg-muted px-1 rounded">py ml_pipeline/train_dnn.py --data-dir . --out public/models --epochs 500</code> to generate model files.
+              Run <code className="bg-muted px-1 rounded">See README training prerequisites; bundled artifacts are never overwritten.</code> to generate model files.
             </p>
           </div>
         </div>
@@ -173,6 +173,7 @@ const DNNPredictorTab: React.FC = () => {
 
       {predictionError && <p role="alert" className="text-sm text-destructive">{predictionError}</p>}
 
+      <p className="text-xs text-muted-foreground">Trained-model output from bundled weights. Reported fit metrics have unverified dataset/evaluation provenance and are not validated accuracy. Clinical performance: Unavailable.</p>
       {/* Controls */}
       {!loading && !error && scalers && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-secondary/20 border border-border">
@@ -266,10 +267,10 @@ const DNNPredictorTab: React.FC = () => {
                 labelFormatter={v => `${Number(v).toFixed(3)} GHz`}
                 formatter={(val: number, name: string) => [
                   `${Number(val).toFixed(2)} dB`,
-                  name === 'dnn' ? 'DNN Prediction' : '📡 VNA Real Data'
+                  name === 'dnn' ? 'DNN Prediction' : 'User-supplied VNA data (unverified provenance)'
                 ]}
               />
-              <Legend formatter={v => v === 'dnn' ? 'DNN Prediction' : '📡 VNA Real Data'} />
+              <Legend formatter={v => v === 'dnn' ? 'DNN Prediction' : 'User-supplied VNA data (unverified provenance)'} />
               <ReferenceLine y={-10} stroke="#ef444466" strokeDasharray="4 4" label={{ value: '-10 dB', fill: '#ef4444', fontSize: 10 }} />
 
               {/* DNN prediction line */}
@@ -373,7 +374,7 @@ const DNNPredictorTab: React.FC = () => {
       <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border font-mono space-y-1">
         <p className="font-semibold text-foreground">🧪 Train the blood-sensing model:</p>
         <p># Train on CST data only:</p>
-        <p className="text-primary">py ml_pipeline/train_dnn.py --data-dir . --out public/models --epochs 500</p>
+        <p className="text-primary">See README training prerequisites; bundled artifacts are never overwritten.</p>
         <p>VNA upload overlays measurements; it does not retrain this model.</p>
       </div>
     </div>

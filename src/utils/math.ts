@@ -112,102 +112,6 @@ export function linspace(start: number, end: number, n: number): number[] {
   return Array.from({ length: n }, (_, i) => start + (end - start) * i / (n - 1));
 }
 
-// Auto-design lookup table from the Python code
-interface AutoDesignEntry {
-  fMin: number; fMax: number; geometry: string; geomDesc: string;
-  unitCellMm: number; patchSizeMm: number; substrateHMm: number;
-  substrateMaterial: string; patchThickMm: number; groundThickMm: number;
-  expectedS11Db: number; expectedAbsorptionPct: number;
-  reference: string; notes: string;
-}
-
-const AUTO_DESIGNS: AutoDesignEntry[] = [
-  { fMin: 1, fMax: 3, geometry: "nested_square_rings", geomDesc: "Nested Square Rings", unitCellMm: 20, patchSizeMm: 9, substrateHMm: 1.6, substrateMaterial: "FR-4 (εr=4.4)", patchThickMm: 0.035, groundThickMm: 0.035, expectedS11Db: -25, expectedAbsorptionPct: 97.8, reference: "Abdulkarim et al. (2021) Phys.Lett.A, DOI:10.1016/j.physleta.2021.127597", notes: "WiFi-band" },
-  { fMin: 3, fMax: 6, geometry: "double_split_rings", geomDesc: "Double Split Ring", unitCellMm: 16, patchSizeMm: 14, substrateHMm: 1.6, substrateMaterial: "FR-4 (εr=4.4)", patchThickMm: 0.035, groundThickMm: 0.035, expectedS11Db: -28, expectedAbsorptionPct: 99.0, reference: "Yoo et al. (2014) IEEE LAWP, DOI:10.1109/LAWP.2013.2287851", notes: "Dual-band" },
-  { fMin: 6, fMax: 12, geometry: "plus_cross_patch", geomDesc: "Plus-Cross Patch", unitCellMm: 15, patchSizeMm: 13, substrateHMm: 1.5, substrateMaterial: "FR-4 (εr=4.4)", patchThickMm: 0.035, groundThickMm: 0.035, expectedS11Db: -22, expectedAbsorptionPct: 99.5, reference: "Pu et al. (2012) APL, DOI:10.1063/1.4753994", notes: "Broadband 8-14 GHz" },
-  { fMin: 12, fMax: 18, geometry: "nested_square_rings", geomDesc: "Double Square Ring", unitCellMm: 12, patchSizeMm: 5.5, substrateHMm: 1.0, substrateMaterial: "FR-4 (εr=4.4)", patchThickMm: 0.035, groundThickMm: 0.035, expectedS11Db: -30, expectedAbsorptionPct: 99.0, reference: "Cheng et al. (2015) Opt.Commun., DOI:10.1016/j.optcom.2014.07.054", notes: "X-Ku band" },
-  { fMin: 18, fMax: 30, geometry: "ring_patch_fixed_geom", geomDesc: "Circular Ring", unitCellMm: 14, patchSizeMm: 6.3, substrateHMm: 1.0, substrateMaterial: "Rogers RT/duroid 5880", patchThickMm: 0.035, groundThickMm: 0.035, expectedS11Db: -26, expectedAbsorptionPct: 98.6, reference: "Wang et al. (2020) Microw.Opt.Technol.Lett., DOI:10.1002/mop.31874", notes: "K-band" },
-  { fMin: 30, fMax: 50, geometry: "ring_patch_fixed_geom", geomDesc: "Circular Ring mm-wave", unitCellMm: 2.8, patchSizeMm: 1.1, substrateHMm: 0.3, substrateMaterial: "Rogers RO4350B", patchThickMm: 0.017, groundThickMm: 0.017, expectedS11Db: -20, expectedAbsorptionPct: 99.0, reference: "Chen et al. (2020) IEEE LAWP, DOI:10.1109/LAWP.2020.2968047", notes: "mm-wave" },
-];
-
-export interface AutoDesignResult {
-  geometry: string; geomDesc: string; unitCellMm: number; patchSizeMm: number;
-  substrateHMm: number; substrateMaterial: string; patchThickMm: number;
-  groundThickMm: number; expectedS11Db: number; expectedAbsorptionPct: number;
-  reference: string; notes: string; lambdaMm: number; freqGhz: number;
-}
-
-export function aiAutoDesign(freqGhz: number): AutoDesignResult {
-  const f = freqGhz;
-  const lam = Math.round((299.792458 / f) * 1000) / 1000;
-  let matched = AUTO_DESIGNS.find(r => f >= r.fMin && f <= r.fMax);
-  if (!matched) {
-    matched = AUTO_DESIGNS.reduce((prev, curr) =>
-      Math.min(Math.abs(f - curr.fMin), Math.abs(f - curr.fMax)) <
-      Math.min(Math.abs(f - prev.fMin), Math.abs(f - prev.fMax)) ? curr : prev
-    );
-  }
-  return {
-    geometry: matched.geometry, geomDesc: matched.geomDesc, unitCellMm: matched.unitCellMm,
-    patchSizeMm: matched.patchSizeMm, substrateHMm: matched.substrateHMm,
-    substrateMaterial: matched.substrateMaterial, patchThickMm: matched.patchThickMm,
-    groundThickMm: matched.groundThickMm, expectedS11Db: matched.expectedS11Db,
-    expectedAbsorptionPct: matched.expectedAbsorptionPct, reference: matched.reference,
-    notes: matched.notes, lambdaMm: lam, freqGhz: f,
-  };
-}
-
-// Build a shape spec for 3D rendering from auto-design result (port of _build_auto_design_spec)
-export function buildAutoDesignSpec(design: AutoDesignResult): { geometryType: string; paramMode: string; paramLabel: string; fixed: Record<string, any> } {
-  const geom = design.geometry;
-  const uc = design.unitCellMm;
-  const h = design.substrateHMm;
-  const pt = design.patchThickMm;
-  const gt = design.groundThickMm;
-  const fixed: Record<string, any> = {
-    unit_cell_mm: uc, patch_thick_mm: pt, ground_thick_mm: gt,
-    substrate_visual_mm: h, substrate_thick_mm: h,
-    patch_material: 'Copper', ground_material: 'Copper',
-    substrate_material: design.substrateMaterial,
-  };
-  if (geom === 'ring_patch_fixed_geom') {
-    fixed.ring_outer_r_mm = Math.round(uc * 0.44 * 1000) / 1000;
-    fixed.ring_inner_r_mm = Math.round(uc * 0.32 * 1000) / 1000;
-  } else if (geom === 'nested_square_rings') {
-    fixed.ring_count = 3;
-    fixed.ring_w_mm = Math.round(uc * 0.055 * 1000) / 1000;
-    fixed.ring_gap_mm = Math.round(uc * 0.055 * 1000) / 1000;
-    fixed.outer_factor = 0.88;
-  } else if (geom === 'double_split_rings') {
-    fixed.ring1_outer_r_mm = Math.round(uc * 0.43 * 1000) / 1000;
-    fixed.ring1_inner_r_mm = Math.round(uc * 0.35 * 1000) / 1000;
-    fixed.ring2_outer_r_mm = Math.round(uc * 0.27 * 1000) / 1000;
-    fixed.ring2_inner_r_mm = Math.round(uc * 0.19 * 1000) / 1000;
-    fixed.gap_centers_deg = [90.0, 270.0];
-    fixed.gap_width_deg = 15.0;
-  } else if (geom === 'plus_cross_patch') {
-    fixed.span_factor = 0.87;
-    fixed.arm_width_factor = 0.10;
-  }
-  return { geometryType: geom, paramMode: 'wm', paramLabel: 'wm', fixed };
-}
-
-export function makeAutoDesignCurves(design: AutoDesignResult): CurvesByP {
-  const f = design.freqGhz;
-  const target = design.expectedS11Db;
-  const freqs = linspace(Math.max(1, f * 0.5), Math.min(50, f * 1.8), 800);
-  const ps = [0.8, 0.9, 1.0, 1.1, 1.2].map(r => design.patchSizeMm * r);
-  const curves: CurvesByP = {};
-  for (const p of ps) {
-    const shift = 1 + 0.03 * ((p - design.patchSizeMm) / Math.max(0.01, design.patchSizeMm));
-    const fc = f * shift;
-    const bw = f * 0.12;
-    const s11 = freqs.map(freq => -2 + (target - (-2)) * Math.exp(-0.5 * Math.pow((freq - fc) / bw, 2)));
-    curves[Math.round(p * 10000) / 10000] = { freqs, s11 };
-  }
-  return curves;
-}
-
 // Synthetic paper shapes
 function gaussFn(f: number, fc: number, bw: number, depth: number): number {
   return depth * Math.exp(-0.5 * Math.pow((f - fc) / Math.max(1e-9, bw), 2));
@@ -248,7 +152,8 @@ export interface ShapeItem {
   fixed: Record<string, any>;
   curves: CurvesByP;
   ranges: { fmin: number; fmax: number; pmin: number; pmax: number };
-  isReal: boolean;
+  isReal: boolean; // Legacy flag: true means CST simulation, not measured data.
+  provenance?: { type: 'simulated' | 'synthetic/demo'; source: string };
   rawFile?: string;
 }
 
@@ -261,10 +166,10 @@ export function makeSyntheticPaperShapes(): ShapeItem[] {
   const curves1: CurvesByP = {};
   for (const p of ps1) curves1[p] = { freqs: freqs1, s11: widebandS11(freqs1, 4, 13, -18, -2, p) };
   shapes.push({
-    name: "paper_arrow_square_circle", displayName: "📄 Paper: Arrow+Circle (4–13 GHz)",
+    name: "paper_arrow_square_circle", displayName: "SYNTHETIC / DEMONSTRATION DATA: Arrow+Circle (4–13 GHz)",
     geometryType: "arrow_square_circle", paramMode: "wm", paramLabel: "wm", fixedCurve: false,
     fixed: { unit_cell_mm: 16, patch_thick_mm: 0.035, ground_thick_mm: 0.035, patch_material: "Copper", ground_material: "Copper", substrate_material: "Substrate", substrate_visual_mm: 16, span_factor: 0.92, arm_width_factor: 0.10, center_outer_r_mm: 2.6, center_inner_r_mm: 1.8 },
-    curves: curves1, ranges: { fmin: 4, fmax: 50, pmin: 3, pmax: 7 }, isReal: false,
+    curves: curves1, ranges: { fmin: 4, fmax: 50, pmin: 3, pmax: 7 }, isReal: false, provenance: { type: 'synthetic/demo', source: 'Generated demonstration; no published experimental dataset' },
   });
 
   // Square Spiral
@@ -272,10 +177,10 @@ export function makeSyntheticPaperShapes(): ShapeItem[] {
   const curves2: CurvesByP = {};
   for (const p of ps1) curves2[p] = { freqs: freqs2, s11: multibandS11(freqs2, [[2.9, 3.1, -26], [6.5, 7.2, -26]], -30, -2, p) };
   shapes.push({
-    name: "paper_square_spiral", displayName: "📄 Paper: Square Spiral (2.9 & 6.7 GHz)",
+    name: "paper_square_spiral", displayName: "SYNTHETIC / DEMONSTRATION DATA: Square Spiral (2.9 & 6.7 GHz)",
     geometryType: "square_spiral", paramMode: "wm", paramLabel: "wm", fixedCurve: false,
     fixed: { unit_cell_mm: 16, patch_thick_mm: 0.035, ground_thick_mm: 0.035, patch_material: "Copper", ground_material: "Copper", substrate_material: "Substrate", substrate_visual_mm: 16, trace_w_mm: 0.6, gap_mm: 0.6, turns: 4, outer_factor: 0.92 },
-    curves: curves2, ranges: { fmin: 2, fmax: 8.5, pmin: 3, pmax: 7 }, isReal: false,
+    curves: curves2, ranges: { fmin: 2, fmax: 8.5, pmin: 3, pmax: 7 }, isReal: false, provenance: { type: 'synthetic/demo', source: 'Generated demonstration; no published experimental dataset' },
   });
 
   // Plus-Cross
@@ -283,10 +188,10 @@ export function makeSyntheticPaperShapes(): ShapeItem[] {
   const curves3: CurvesByP = {};
   for (const p of ps1) curves3[p] = { freqs: freqs3, s11: multibandS11(freqs3, [[8, 11, -30]], -35, -2, p) };
   shapes.push({
-    name: "paper_plus_cross", displayName: "📄 Paper: Plus-Cross (8–11 GHz, X-band)",
+    name: "paper_plus_cross", displayName: "SYNTHETIC / DEMONSTRATION DATA: Plus-Cross (8–11 GHz, X-band)",
     geometryType: "plus_cross_patch", paramMode: "wm", paramLabel: "wm", fixedCurve: false,
     fixed: { unit_cell_mm: 15, patch_thick_mm: 0.035, ground_thick_mm: 0.035, patch_material: "Copper", ground_material: "Copper", substrate_material: "FR-4 (lossy)", substrate_visual_mm: 1.5, arm_width_factor: 0.28, span_factor: 0.90 },
-    curves: curves3, ranges: { fmin: 6, fmax: 12.5, pmin: 3, pmax: 7 }, isReal: false,
+    curves: curves3, ranges: { fmin: 6, fmax: 12.5, pmin: 3, pmax: 7 }, isReal: false, provenance: { type: 'synthetic/demo', source: 'Generated demonstration; no published experimental dataset' },
   });
 
   return shapes;

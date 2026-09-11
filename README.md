@@ -88,26 +88,39 @@ inference must remain disabled until source-backed metadata is supplied. Do not
 infer activations from layer shapes, retrain to conceal missing metadata, or use
 synthetic results as model output.
 
-The browser blood-sensing JSON model is separate. `ml_pipeline/train_dnn.py`
-requires NumPy and the three original blood CST datasets identified in that script.
-It contains a metrics-derived fallback: verify all raw inputs exist before training
-for research. To experiment without replacing bundled weights, choose another output:
+The browser blood-sensing JSON model is separate. Its bundled numeric weights
+are unchanged; reported fit metrics are labelled unverified, not validation accuracy.
+
+`blood_sensing_pipeline.py` now requires all three original source CST datasets,
+PyTorch, and an explicit `--widths-json` file mapping air/normal_blood/cancer_blood
+to patch widths in mm verified against the source setup. It does not fabricate
+missing samples or assume widths. Missing/invalid inputs return `status: unavailable`
+and no training metrics. No output is written unless a new `--output-dir` is supplied;
+existing artifacts cannot be overwritten. A completed fit reports **in-sample**
+metrics only, with source metadata; it is not held-out evaluation or clinical proof.
 
 ```sh
-python ml_pipeline/train_dnn.py --data-dir . --out training-output --epochs 800
+python blood_sensing_pipeline.py --data-dir SOURCE_DIRECTORY --widths-json VERIFIED_WIDTHS.json --output-dir NEW_OUTPUT_DIRECTORY
 ```
 
-Do not run `train_hybrid_vna.py` against the current blood model without reconciling
-its older geometry/scaler assumptions. `blood_sensing_pipeline.py` is a separate
-pipeline, not evidence for absorber architectures. Training has not been run in
-this readiness work; no checkpoints, datasets or reported accuracy were changed.
+`ml_pipeline/train_dnn.py` is a legacy **analytically augmented demonstration** trainer.
+It refuses to run without `--allow-analytical-augmentation`, all original CST inputs,
+and a new output directory. Its 10mm baseline assumption is unverified, and its
+reported fits are not experimental or research validation. No training is run in
+this cleanup. `train_hybrid_vna.py`'s entry point is disabled pending verified
+per-measurement geometry/units and a compatible input contract. Retained legacy
+internals are not a supported training workflow.
+
+See [SCIENTIFIC_PROVENANCE.md](SCIENTIFIC_PROVENANCE.md) for the claim audit,
+source classifications, removed claims and limitations. Historical metrics JSON
+and checkpoints remain unchanged archives; their presence is not validation proof.
 
 ## Validation
 
 ```sh
 pnpm typecheck
 pnpm test
-python -m pytest backend/test_prediction.py -q
+python -m pytest -q
 pnpm build
 git diff --check
 ```
@@ -124,8 +137,9 @@ commands. Test fixtures are not scientific datasets or accuracy measurements.
 
 - Verify absorber trainer metadata and then validate actual inference against
   independent reference outputs and held-out measured data.
-- Existing literature/auto-design and other illustrative scientific paths remain
-  in the project; audit provenance before using any outputs as research evidence.
+- Analytical sensing is labelled unverified demonstration; synthetic search data is
+  excluded by default and clearly labelled after explicit opt-in. Unsupported
+  auto-design performance substitutions have been removed.
 - CST macros have not been executed in CST. Unsupported geometry and missing
   substrate properties are rejected; existing FR-4 defaults are not measurements.
 - Configure and independently validate Supabase access policies/chat secrets and
@@ -134,3 +148,11 @@ commands. Test fixtures are not scientific datasets or accuracy measurements.
   before exposing compute publicly. CORS is not authentication.
 - Production build still warns about the large frontend bundle. Dependency
   deprecation warnings remain; no broad dependency upgrade was performed.
+
+## Experimental Sensing Lab
+
+The new local research-only tab supports approved VNA imports, calibrated manual
+image digitization, anonymous specimen groups, dataset snapshots and NumPy baseline
+training. See [EXPERIMENTAL_LAB.md](EXPERIMENTAL_LAB.md) for setup, privacy, schemas,
+validation gates and limitations. Experimental files live in ignored
+`experimental-data/` and are never sent to chat. This is not a diagnostic system.

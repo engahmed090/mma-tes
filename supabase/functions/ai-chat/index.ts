@@ -1,3 +1,4 @@
+import { buildLiteraturePrompt } from "./literaturePrompt.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -145,26 +146,19 @@ serve(async (req) => {
       brain === "cst"
         ? `You are Ahmed's AI Expert on metamaterial absorbers. You have deep knowledge of microwave absorber design, CST simulation, and electromagnetic theory.
 
-You have access to the user's REAL CST simulation data:
+You have access to the user-provided CST simulation data (not measured experiments):
 ${knowledge || "No data loaded yet."}
 
 RULES:
+- Identify the source type: simulation, analytical, trained-model, literature-reference, measured (user-reported), or synthetic/demo.
+- Never invent scientific metrics, citations, clinical claims, or missing values. Mark unsupported claims unverified or unavailable.
+- Blood/cancer, nitrate or sugar sensing discussions are not diagnostic validation. Do not turn simulation fits into measured or clinical accuracy.
 - Always reference the actual data when answering about specific shapes or frequencies
 - Provide specific numbers: S11 values, absorption percentages, optimal dimensions
 - If a frequency is outside the data range, say so clearly
 - Use markdown formatting for readability
 - Be concise but thorough`
-        : `You are Ahmed's AI Expert on metamaterial absorbers with access to the latest research literature.
-
-You have searched the web and found the following information:
-${searchContext}
-
-RULES:
-- Provide specific absorber designs with FULL dimensions (P, patch size, substrate thickness, material)
-- Always cite sources with links when available
-- Compare designs and recommend the best option
-- Include practical simulation setup tips for CST
-- Use markdown formatting`;
+        : buildLiteraturePrompt(searchContext);
 
     const llmMessages = [
       { role: "system", content: systemPrompt },

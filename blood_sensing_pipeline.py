@@ -9,13 +9,13 @@
     - normal-blood-1-5ghz.txt   (Normal Blood, eps_r = 60.0)
     - bood-cancer-1-5ghz.txt    (Blood Cancer, eps_r = 68.0)
 
-  Output    : blood_sensing_metrics.json  (consumed by React frontend)
-              fwd_blood_sensing.pt        (if PyTorch available)
+  Output    : new --output-dir only, never overwrites bundled artifacts.
+              Missing datasets, widths or PyTorch yield an unavailable state.
 =============================================================================
 """
 
-import sys, io, os, json
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+import sys, os, json, hashlib
+
 
 import numpy as np
 
@@ -106,19 +106,32 @@ def downsample_curve(freq, s11_db, n=200):
 
 
 # ─── MAIN PIPELINE ───────────────────────────────────────────────────────────
-def run_pipeline():
+def unavailable(reason):
+    return {"status": "unavailable", "reason": reason, "metrics": None}
+
+
+def run_pipeline(data_dir=SCRIPT_DIR, output_dir=None, sample_widths=None):
     print("\n[INFO] Blood Cancer Sensing Pipeline — Starting...\n")
 
+    missing = [d["file"] for d in DATASETS.values() if not os.path.isfile(os.path.join(data_dir, d["file"]))]
+    if missing:
+        return unavailable("Required CST datasets missing: " + ", ".join(missing))
+    if not sample_widths or any(k not in sample_widths or not isinstance(sample_widths[k], (int, float)) or isinstance(sample_widths[k], bool) or not np.isfinite(sample_widths[k]) or sample_widths[k] <= 0 for k in DATASETS):
+        return unavailable("Verified patch width for every source dataset is required; no width is assumed.")
     parsed = {}
     resonances = {}
 
     for key, ds in DATASETS.items():
-        fpath = os.path.join(SCRIPT_DIR, ds["file"])
+        fpath = os.path.join(data_dir, ds["file"])
         if not os.path.exists(fpath):
-            print(f"[WARN] File not found: {fpath} — Skipping.")
-            continue
+            return unavailable("Required dataset disappeared: " + ds["file"])
         print(f"[OK]  Parsing {ds['file']} (eps_r = {ds['eps_r']})...")
-        freq, s11 = parse_cst_file(fpath)
+        try:
+            freq, s11 = parse_cst_file(fpath)
+        except (OSError, ValueError) as error:
+            return unavailable(str(error))
+        if len(freq) < 2 or not np.isfinite(freq).all() or not np.isfinite(s11).all() or not (np.diff(freq) > 0).all():
+            return unavailable("Invalid or empty CST dataset: " + ds["file"])
         absorption = compute_absorption(s11)
         fr, s11_at_fr = find_resonant_frequency(freq, s11)
         fr_idx = np.argmin(s11)
@@ -129,6 +142,8 @@ def run_pipeline():
         _, abs_ds    = downsample_curve(freq, absorption, 250)
 
         parsed[key] = {
+            "provenance": {"type": "simulated", "source": ds["file"], "sha256": hashlib.sha256(open(fpath, "rb").read()).hexdigest()},
+            "w_mm": sample_widths[key],
             "freq_ghz":       freq_ds,
             "s11_db":         s11_ds,
             "absorption":     abs_ds,
@@ -191,84 +206,51 @@ def run_pipeline():
         from torch.utils.data import TensorDataset, DataLoader
 
         print("\n[INFO] PyTorch detected — Training blood-sensing DNN...")
-        dnn_metrics = train_blood_dnn(parsed, resonances)
+        dnn_metrics = train_blood_dnn(parsed, resonances, output_dir)
         print(f"[OK]  DNN training complete. MSE = {dnn_metrics['final_mse']:.6f}")
 
-    except ImportError:
-        print("\n[INFO] PyTorch not available — Skipping DNN training. "
-              "Using physics-computed metrics only.")
-        dnn_metrics = generate_synthetic_dnn_metrics(parsed)
+    except (ImportError, OSError, ValueError, RuntimeError) as error:
+        return {**unavailable(str(error)), "datasets": parsed, "kpis": kpis}
 
     # ─── EXPORT JSON ─────────────────────────────────────────────────────────
     output = {
-        "meta": {
-            "substrate_h_mm":    1.0,
-            "substrate_eps_r":   4.3,
-            "analyte_r_mm":      3.0,
-            "analyte_h_mm":      1.0,
-            "patch_w_range_mm":  [10.0, 14.0],
-            "freq_range_ghz":    [1.0, 5.0],
-            "description":       "CST simulation data — 1–5 GHz blood cancer sensing"
-        },
+        "status": "trained",
+        "meta": {"type": "simulated", "absorption_assumption": "S21=0; not a clinical diagnostic validation"},
         "datasets":    parsed,
         "kpis":        kpis,
         "dnn_metrics": dnn_metrics,
     }
 
-    out_path = os.path.join(SCRIPT_DIR, "blood_sensing_metrics.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
-
-    print(f"\n[OK]  Exported -> {out_path}")
+    if output_dir:
+        out_path = os.path.join(output_dir, "blood_sensing_metrics.json")
+        with open(out_path, "x", encoding="utf-8") as f:
+            json.dump(output, f, indent=2)
     return output
 
 
 # ─── DNN TRAINING (requires PyTorch) ─────────────────────────────────────────
-def train_blood_dnn(parsed, resonances):
+def train_blood_dnn(parsed, resonances, output_dir=None):
     import torch
     import torch.nn as nn
     from torch.utils.data import TensorDataset, DataLoader
 
-    # Build augmented dataset: [w, eps_r, f_norm] -> S11
-    # w sweep: 10–14 mm, step 0.5
-    w_vals = np.arange(10.0, 14.5, 0.5)
-    eps_r_vals = [1.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 68.0, 75.0, 90.0]
-
-    # Use air data as base; shift resonance for each eps_r using physics model
-    air_data = parsed["air"]
-    freq_base = np.array(air_data["freq_ghz"])
-    s11_base  = np.array(air_data["s11_db"])
-
-    # Resonance shift model: fr(eps) ≈ fr0 / sqrt(eps_r_eff)
-    fr_air = air_data["fr_ghz"]     # 3.480 GHz
-
+    if any(key not in parsed or "w_mm" not in parsed[key] for key in DATASETS):
+        raise ValueError("Verified source datasets and patch widths are required.")
     rows_X, rows_y = [], []
-    for w in w_vals:
-        for eps in eps_r_vals:
-            # Physics-based fr scaling for different widths
-            w_scale = (10.0 / w) ** 0.5    # resonance ∝ 1/w at fixed other params
-            eps_eff = 1.0 + (eps - 1.0) * 0.25   # partial field confinement factor
-            fr_pred = fr_air * w_scale / np.sqrt(eps_eff)
-
-            for fi, f in enumerate(freq_base):
-                # Lorentzian S11 model: S11(f) = S11_min * (BW/2)^2 / ((f-fr)^2 + (BW/2)^2)
-                bw_ghz = air_data["bw_mhz"] / 1000.0
-                s11_min_val = air_data["s11_at_fr_db"]
-                s11_val = s11_min_val * (bw_ghz/2)**2 / ((f - fr_pred)**2 + (bw_ghz/2)**2)
-                s11_val = max(s11_val, -30.0)  # clamp
-
-                rows_X.append([w/14.0, eps/90.0, f/5.0])  # normalized
-                rows_y.append([s11_val / 30.0])            # normalized
-
-    # Add real CST points
-    for key in ["air", "normal_blood", "cancer_blood"]:
-        if key not in parsed:
-            continue
+    freq_base = np.array(parsed["air"]["freq_ghz"])
+    for key in DATASETS:
         d = parsed[key]
-        eps = d["eps_r"]
         for f, s11 in zip(d["freq_ghz"], d["s11_db"]):
-            rows_X.append([12.0/14.0, eps/90.0, f/5.0])  # assume w=12 for real data
-            rows_y.append([s11 / 30.0])
+            rows_X.append([d["w_mm"]/14.0, d["eps_r"]/90.0, f/5.0])
+            rows_y.append([s11/30.0])
+    if not rows_X or not np.isfinite(rows_X).all() or not np.isfinite(rows_y).all():
+        raise ValueError("Training inputs are empty or non-finite.")
+    model_path = None
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        model_path = os.path.join(output_dir, "fwd_blood_sensing.pt")
+        if os.path.exists(model_path) or os.path.exists(os.path.join(output_dir, "blood_sensing_metrics.json")):
+            raise ValueError("Output exists; choose a new directory to preserve prior results.")
 
     X = torch.tensor(rows_X, dtype=torch.float32)
     y = torch.tensor(rows_y, dtype=torch.float32)
@@ -312,21 +294,22 @@ def train_blood_dnn(parsed, resonances):
             print(f"      Epoch {epoch:3d}/{epochs}  Loss = {epoch_loss:.6f}")
             loss_history.append({"epoch": epoch, "loss": round(epoch_loss, 8)})
 
-    # Save model
-    model_path = os.path.join(SCRIPT_DIR, "fwd_blood_sensing.pt")
-    torch.save(model.state_dict(), model_path)
-    print(f"[OK]  Model saved -> {model_path}")
-
-    # Evaluate MSE on real CST data
+    # In-sample fit metrics, NOT held-out accuracy or clinical performance.
     model.eval()
     with torch.no_grad():
-        final_preds = model(X[-len(rows_y)//10:]).cpu().numpy() * 30.0
-        final_true  = y[-len(rows_y)//10:].cpu().numpy() * 30.0
+        final_preds = model(X).cpu().numpy() * 30.0
+        final_true  = y.cpu().numpy() * 30.0
     mse = float(np.mean((final_preds - final_true)**2))
     rmse = float(np.sqrt(mse))
     ss_res = float(np.sum((final_true - final_preds)**2))
     ss_tot = float(np.sum((final_true - final_true.mean())**2))
-    r2 = 1.0 - (ss_res / (ss_tot + 1e-10))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else None
+
+    if not np.isfinite(mse) or not np.isfinite(rmse) or (r2 is not None and not np.isfinite(r2)):
+        raise ValueError("Training produced non-finite fit metrics.")
+    if model_path:
+        with open(model_path, "xb") as model_file:
+            torch.save(model.state_dict(), model_file)
 
     # Generate prediction curves for each w @ air, normal, cancer
     pred_curves = {}
@@ -359,70 +342,30 @@ def train_blood_dnn(parsed, resonances):
         "loss_history": loss_history,
         "final_mse": mse,
         "final_rmse": rmse,
-        "r2_score": round(r2, 6),
+        "r2_score": round(r2, 6) if r2 is not None else None,
         "training_points": len(rows_X),
-        "model_file": "fwd_blood_sensing.pt",
-        "pred_curves": pred_curves,
-    }
-
-
-# ─── FALLBACK METRICS (no PyTorch) ───────────────────────────────────────────
-def generate_synthetic_dnn_metrics(parsed):
-    """Generate realistic-looking metrics without actual DNN training."""
-    loss_history = []
-    loss = 0.4500
-    for epoch in range(10, 101, 10):
-        loss = loss * np.exp(-0.035 * 10)
-        loss = max(loss + np.random.uniform(-0.001, 0.001), 0.0002)
-        loss_history.append({"epoch": epoch, "loss": round(float(loss), 8)})
-
-    # Build extrapolation prediction curves using physics model
-    if "air" not in parsed:
-        return {"framework": "Physics Model (PyTorch not available)", "loss_history": loss_history}
-
-    freq_base = np.array(parsed["air"]["freq_ghz"])
-    pred_curves = {}
-    for key in ["air", "normal_blood", "cancer_blood"]:
-        if key not in parsed:
-            continue
-        ds = parsed[key]
-        eps  = ds["eps_r"]
-        fr0  = parsed["air"]["fr_ghz"]
-        bw   = parsed["air"]["bw_mhz"] / 1000.0
-        s11m = parsed["air"]["s11_at_fr_db"]
-        for w in [10.0, 12.0, 14.0]:
-            w_scale = (10.0 / w) ** 0.5
-            eps_eff = 1.0 + (eps - 1.0) * 0.25
-            fr_pred = fr0 * w_scale / np.sqrt(eps_eff)
-            s11_pred = s11m * (bw/2)**2 / ((freq_base - fr_pred)**2 + (bw/2)**2 + 1e-9)
-            s11_pred = np.clip(s11_pred, -30.0, 0.0)
-            label = f"{key}_w{int(w)}"
-            pred_curves[label] = {
-                "freq_ghz": freq_base.tolist(),
-                "s11_pred": s11_pred.tolist(),
-                "w_mm": w,
-                "eps_r": eps,
-            }
-
-    return {
-        "framework": "Physics Model (PyTorch not available — install for DNN)",
-        "architecture": "Lorentzian Resonance Model + εr Scaling",
-        "input_features": ["w_mm", "eps_r", "freq_GHz"],
-        "output": "S11 (dB)",
-        "epochs": 100,
-        "loss_history": loss_history,
-        "final_mse": 0.000421,
-        "final_rmse": 0.020519,
-        "r2_score": 0.9991,
-        "training_points": 24000,
-        "model_file": None,
+        "model_file": model_path,
+        "provenance": {"type": "trained-model", "evaluation": "in-sample fit on source CST samples; not held-out", "sources": [d["provenance"] for d in parsed.values()]},
         "pred_curves": pred_curves,
     }
 
 
 if __name__ == "__main__":
-    results = run_pipeline()
-    print("\n  Pipeline complete.")
+    import argparse
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description="Train only from explicit CST datasets and verified widths.")
+    parser.add_argument("--data-dir", default=SCRIPT_DIR)
+    parser.add_argument("--output-dir", default=None)
+    parser.add_argument("--widths-json", help="JSON mapping air/normal_blood/cancer_blood to source-verified widths in mm")
+    args = parser.parse_args()
+    try:
+        with open(args.widths_json, encoding="utf-8") as width_file:
+            widths = json.load(width_file)
+    except (TypeError, OSError, ValueError):
+        widths = None
+    results = run_pipeline(args.data_dir, args.output_dir, widths)
+    print(json.dumps({k: v for k, v in results.items() if k in ("status", "reason")}, indent=2))
     if "kpis" in results and "normal_blood" in results["kpis"]:
         k = results["kpis"]["normal_blood"]
         print(f"  Normal Blood Sensitivity:  {k['sensitivity_mhz_per_deps']:.4f} MHz/Δε")

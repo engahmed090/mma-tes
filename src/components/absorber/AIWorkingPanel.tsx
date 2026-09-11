@@ -19,22 +19,22 @@ interface AIWorkingPanelProps {
 const STAGE_META: Record<AIStage, { label: string; icon: React.ElementType; color: string }> = {
   idle:          { label: 'Idle',                  icon: Brain,       color: 'text-muted-foreground' },
   input:         { label: 'Receiving Inputs',      icon: Zap,         color: 'text-cyan-400' },
-  preprocessing: { label: 'Feature Encoding',     icon: Layers,      color: 'text-blue-400' },
-  network:       { label: 'Neural Network Active', icon: Activity,    color: 'text-purple-400' },
+  preprocessing: { label: 'Preparing Request',     icon: Layers,      color: 'text-blue-400' },
+  network:       { label: 'Processing Request', icon: Activity,    color: 'text-purple-400' },
   output:        { label: 'Generating Output',     icon: BarChart3,   color: 'text-emerald-400' },
-  complete:      { label: 'Prediction Complete',   icon: CheckCircle2, color: 'text-green-400' },
+  complete:      { label: 'Request Complete',   icon: CheckCircle2, color: 'text-green-400' },
 };
 
 const STAGE_ORDER: AIStage[] = ['input', 'preprocessing', 'network', 'output', 'complete'];
 
-// Layer config for real metamaterial absorber NN
+// Decorative workflow diagram; not a model architecture
 const LAYER_CONFIG = [
-  { name: 'Input Features', nodes: 4, labels: ['Freq (GHz)', 'Target S₁₁', 'Geometry', 'P (mm)'] },
-  { name: 'Normalization', nodes: 4, labels: ['x̂₁', 'x̂₂', 'x̂₃', 'x̂₄'] },
-  { name: 'Dense-128 ReLU', nodes: 6, labels: ['h₁', 'h₂', 'h₃', 'h₄', 'h₅', 'h₆'] },
-  { name: 'Dense-64 ReLU', nodes: 5, labels: ['h₁', 'h₂', 'h₃', 'h₄', 'h₅'] },
-  { name: 'Dense-32 ReLU', nodes: 4, labels: ['h₁', 'h₂', 'h₃', 'h₄'] },
-  { name: 'Output Layer', nodes: 3, labels: ['P_opt', 'S₁₁ (dB)', 'Abs (%)'] },
+  { name: 'Inputs', nodes: 4, labels: ['Freq (GHz)', 'Target S₁₁', 'Geometry', 'P (mm)'] },
+  { name: 'Preparation', nodes: 4, labels: ['x̂₁', 'x̂₂', 'x̂₃', 'x̂₄'] },
+  { name: 'Workflow step 1', nodes: 6, labels: ['h₁', 'h₂', 'h₃', 'h₄', 'h₅', 'h₆'] },
+  { name: 'Workflow step 2', nodes: 5, labels: ['h₁', 'h₂', 'h₃', 'h₄', 'h₅'] },
+  { name: 'Workflow step 3', nodes: 4, labels: ['h₁', 'h₂', 'h₃', 'h₄'] },
+  { name: 'Outputs', nodes: 3, labels: ['P_opt', 'S₁₁ (dB)', 'Abs (%)'] },
 ];
 
 const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs, elapsed, title }) => {
@@ -71,7 +71,7 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
     if (stage !== 'idle') setExpanded(true);
   }, [stage]);
 
-  // Generate "activation values" from real inputs
+  // Show supplied inputs/outputs only; hidden values are unavailable.
   const getNodeValue = useCallback((layerIdx: number, nodeIdx: number): string => {
     if (layerIdx === 0 && inputs.length > 0) {
       // Show real input values
@@ -82,16 +82,10 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
       const out = outputs[nodeIdx];
       return out ? out.value : '—';
     }
-    if (layerIdx <= activeLayer && stage !== 'idle') {
-      // Show simulated activation values for hidden layers
-      const seed = layerIdx * 7 + nodeIdx * 13;
-      const val = (Math.sin(seed) * 0.5 + 0.5);
-      return val.toFixed(3);
-    }
     return '—';
   }, [inputs, outputs, activeLayer, stage]);
 
-  // Canvas drawing with real data flow
+  // Decorative workflow animation, not recorded model execution.
   const drawNetwork = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -252,7 +246,7 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
       ctx.font = 'bold 9px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(74, 222, 128, 0.9)';
       ctx.textAlign = 'center';
-      ctx.fillText('✓ Inference Complete', w / 2, 12);
+      ctx.fillText('✓ Request Complete', w / 2, 12);
     }
 
     if (stage !== 'idle') {
@@ -317,7 +311,7 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
             }
           </div>
           <span className="text-xs font-semibold text-foreground">
-            {title || 'Neural Processing View'}
+            {title || 'Request Progress'}
           </span>
           <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${meta.color} bg-white/5`}>
             {meta.label}
@@ -367,7 +361,7 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
           <div className="grid grid-cols-1 md:grid-cols-[180px_1fr_180px] gap-3 items-start">
             {/* Inputs - real values */}
             <div className="space-y-1.5">
-              <div className="text-[10px] font-semibold text-cyan-400/80 uppercase tracking-wider">Real Input Data</div>
+              <div className="text-[10px] font-semibold text-cyan-400/80 uppercase tracking-wider">Provided Inputs</div>
               {inputs.map((inp, i) => (
                 <div key={i} className="flex items-center gap-2 group">
                   <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
@@ -377,27 +371,12 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
                   <span className="text-[10px] font-mono text-cyan-300 font-bold">{inp.value}</span>
                 </div>
               ))}
-              {/* Normalized view */}
-              {currentIdx >= 1 && (
-                <div className="mt-2 pt-2 border-t border-slate-700/30">
-                  <div className="text-[9px] text-blue-400/70 uppercase tracking-wider mb-1">Normalized</div>
-                  {inputs.map((inp, i) => {
-                    const normVal = (Math.sin(i * 3.14 + 1.7) * 0.4 + 0.5).toFixed(4);
-                    return (
-                      <div key={i} className="flex items-center gap-1 mb-0.5">
-                        <div className="h-2 rounded-sm bg-blue-500/40 transition-all duration-700"
-                          style={{ width: `${parseFloat(normVal) * 100}%`, minWidth: 4 }}
-                        />
-                        <span className="text-[8px] font-mono text-blue-300/70">{normVal}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+
             </div>
 
-            {/* Neural network canvas */}
+            {/* Decorative workflow canvas */}
             <div className="relative">
+              <p className="text-xs text-muted-foreground">Illustrative workflow only; no model weights, activations or confidence are shown.</p>
               <canvas
                 ref={canvasRef}
                 className="w-full rounded border border-slate-700/30"
@@ -422,14 +401,14 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
               )}
               {/* Layer count indicator */}
               <div className="absolute top-1 right-2 text-[8px] font-mono text-muted-foreground/40">
-                {LAYER_CONFIG.length} layers · {LAYER_CONFIG.reduce((s, l) => s + l.nodes, 0)} neurons
+                {LAYER_CONFIG.length} stages · {LAYER_CONFIG.reduce((s, l) => s + l.nodes, 0)} nodes
               </div>
             </div>
 
             {/* Outputs - real values */}
             <div className="space-y-1.5">
               <div className="text-[10px] font-semibold text-emerald-400/80 uppercase tracking-wider">
-                {stage === 'complete' ? 'Predicted Output' : 'Awaiting Output...'}
+                {stage === 'complete' ? 'Returned Output' : 'Awaiting Output...'}
               </div>
               {stage === 'complete' || stage === 'output' ? (
                 outputs.map((out, i) => (
@@ -461,7 +440,7 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
                 <div className="mt-2 pt-2 border-t border-slate-700/30">
                   <div className="text-[9px] text-green-400/70 uppercase tracking-wider mb-1">Run Info</div>
                   <div className="text-[9px] font-mono text-green-300/60">
-                    Time: {(elapsed / 1000).toFixed(2)}s
+                    UI time (includes animation): {(elapsed / 1000).toFixed(2)}s
                   </div>
                   <div className="text-[9px] font-mono text-green-300/60">
                     Status: ✓ Complete
@@ -476,7 +455,7 @@ const AIWorkingPanel: React.FC<AIWorkingPanelProps> = ({ stage, inputs, outputs,
             <StageIcon className={`w-3.5 h-3.5 ${meta.color}`} />
             <span className={`text-[10px] font-mono ${meta.color}`}>{meta.label}</span>
             <span className="text-[8px] font-mono text-muted-foreground/40 ml-auto">
-              Metamaterial Absorber NN · {LAYER_CONFIG.reduce((s, l) => s + l.nodes, 0)} params
+              Decorative diagram · {LAYER_CONFIG.reduce((s, l) => s + l.nodes, 0)} nodes
             </span>
             {stage === 'complete' && elapsed != null && (
               <span className="text-[10px] font-mono text-green-400">

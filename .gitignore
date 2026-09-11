@@ -36,3 +36,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Private local experimental measurements, snapshots and model registry
+/experimental-data/

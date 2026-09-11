@@ -141,6 +141,10 @@ def train_finetune(layers, scaler, X_vna, y_vna, epochs=200, lr=1e-4, batch_size
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
+    raise ValueError("Unavailable: legacy VNA fine-tuning assumes units, geometry identity and patch width. Verified per-measurement metadata and a matching model contract are required.")
+
+
+def _legacy_main_disabled():
     ap = argparse.ArgumentParser()
     ap.add_argument("--vna-dir", default="./vna_data", help="Folder of VNA CSV/TXT files")
     ap.add_argument("--out", default="public/models", help="Output directory for updated weights")

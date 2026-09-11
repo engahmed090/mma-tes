@@ -10,7 +10,13 @@ try:
 except ImportError:
     from model_runtime import ModelUnavailable, load_predictor
 
+try:
+    from .experimental.api import router as experimental_router
+except ImportError:
+    from experimental.api import router as experimental_router
+
 app = FastAPI(title="Generative AI Backend for Absorbers")
+app.include_router(experimental_router)
 app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://127.0.0.1:8080,http://localhost:8080").split(",") if origin.strip()], allow_credentials=False,
                    allow_methods=["*"], allow_headers=["*"])
 MODELS_DIR = Path(__file__).resolve().parent.parent

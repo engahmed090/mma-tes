@@ -10,7 +10,7 @@ import AutoDesignCard from './AutoDesignCard';
 import DeepLearningOptimizationBox from './DeepLearningOptimizationBox';
 import AIWorkingPanel, { useAIStages, AIWorkingInput } from './AIWorkingPanel';
 import { LoadedShape } from '@/hooks/useShapeData';
-import { searchResultStatus, absorptionFromS11, calcBandwidth, nearestPKey, aiAutoDesign } from '@/utils/math';
+import { searchResultStatus, absorptionFromS11, calcBandwidth, nearestPKey } from '@/utils/math';
 import { Search } from 'lucide-react';
 
 interface FindBestTabProps {
@@ -67,7 +67,7 @@ const FindBestTab: React.FC<FindBestTabProps> = ({ shapes, pickAllInFreq, pickAl
       setResults(null);
       setAiOutputs([
         { label: 'Result', value: 'No match found' },
-        { label: 'Fallback', value: 'AI Auto-Design' },
+        { label: 'Fallback', value: 'Unavailable' },
       ]);
     } else {
       setResults(r);
@@ -139,7 +139,7 @@ const FindBestTab: React.FC<FindBestTabProps> = ({ shapes, pickAllInFreq, pickAl
         inputs={aiInputs}
         outputs={aiOutputs}
         elapsed={elapsed}
-        title="Absorber Search — Neural Processing"
+        title="Absorber Search — Request Progress"
       />
 
       {showAutoDesign && <AutoDesignCard freqGhz={autoDesignFreq} thrDb={thrDb} />}
@@ -171,7 +171,7 @@ const FindBestTab: React.FC<FindBestTabProps> = ({ shapes, pickAllInFreq, pickAl
                       <tr key={i} className="border-t border-border/50 hover:bg-secondary/20">
                         <td className="py-2 px-3">{i < 3 ? medals[i] : `#${i + 1}`}</td>
                         <td className="py-2 px-3 text-foreground">{r.item.displayName.slice(0, 40)}</td>
-                        <td className="py-2 px-3">{r.item.isReal ? 'CST Raw' : 'Literature'}</td>
+                        <td className="py-2 px-3">{r.item.isReal ? 'CST Raw' : 'SYNTHETIC / DEMONSTRATION DATA'}</td>
                         <td className="py-2 px-3 text-right">{r.best?.p?.toFixed(4)}</td>
                         <td className="py-2 px-3 text-right">{s11Val.toFixed(2)}</td>
                         <td className="py-2 px-3 text-right">{absPct.toFixed(1)}%</td>

@@ -8,7 +8,7 @@ import AutoDesignCard from './AutoDesignCard';
 import DeepLearningOptimizationBox from './DeepLearningOptimizationBox';
 import AIWorkingPanel, { useAIStages, AIWorkingInput } from './AIWorkingPanel';
 import { LoadedShape } from '@/hooks/useShapeData';
-import { interpS11At, nearestPKey, absorptionFromS11, aiAutoDesign } from '@/utils/math';
+import { interpS11At, nearestPKey, absorptionFromS11 } from '@/utils/math';
 import { RefreshCw } from 'lucide-react';
 
 interface InverseDesignTabProps {
@@ -68,7 +68,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
       setCandidates(null);
       setAiOutputs([
         { label: 'Result', value: 'No match' },
-        { label: 'Fallback', value: 'AI Auto-Design' },
+        { label: 'Fallback', value: 'Unavailable' },
       ]);
     } else {
       const top = cands.slice(0, 3);
@@ -108,7 +108,7 @@ const InverseDesignTab: React.FC<InverseDesignTabProps> = ({ shapes, thrDb }) =>
         inputs={aiInputs}
         outputs={aiOutputs}
         elapsed={elapsed}
-        title="Inverse Design — Neural Processing"
+        title="Inverse Design — Request Progress"
       />
 
       {showAuto && <AutoDesignCard freqGhz={invF} thrDb={thrDb} />}

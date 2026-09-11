@@ -8,7 +8,7 @@ export interface LoadedShape extends ShapeItem {
   config: ShapeConfig;
 }
 
-export function useShapeData(includePaper: boolean = true) {
+export function useShapeData(includePaper: boolean = false) {
   const [shapes, setShapes] = useState<LoadedShape[]>([]);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
@@ -47,6 +47,7 @@ export function useShapeData(includePaper: boolean = true) {
             curves,
             ranges: { fmin, fmax, pmin, pmax },
             isReal: true,
+            provenance: { type: 'simulated', source: cfg.rawFile },
             rawFile: cfg.rawFile,
             config: cfg,
           });
@@ -76,26 +77,28 @@ export function useShapeData(includePaper: boolean = true) {
     const eps = 0.02;
     const results: { item: LoadedShape; best: { p: number; s11_db: number; pass: boolean }; score: number; type: string }[] = [];
     for (const item of shapes) {
+      if (!item.isReal && !includePaper) continue;
       if (f < item.ranges.fmin - eps || f > item.ranges.fmax + eps) continue;
       const r = rawBestAtFreq(item.curves, f, thr);
       if (r) results.push({ item, best: r, score: r.s11_db, type: 'raw' });
     }
     results.sort((a, b) => a.score - b.score);
     return results;
-  }, [shapes]);
+  }, [shapes, includePaper]);
 
   const pickAllInRange = useCallback((f1: number, f2: number, thr: number) => {
     const lo = Math.min(f1, f2), hi = Math.max(f1, f2);
     const eps = 0.02;
     const results: { item: LoadedShape; best: any; score: number; type: string }[] = [];
     for (const item of shapes) {
+      if (!item.isReal && !includePaper) continue;
       if (lo < item.ranges.fmin - eps || hi > item.ranges.fmax + eps) continue;
       const r = rawBestInRange(item.curves, lo, hi, thr);
       if (r) results.push({ item, best: r, score: r.best_db, type: 'raw' });
     }
     results.sort((a, b) => a.score - b.score);
     return results;
-  }, [shapes]);
+  }, [shapes, includePaper]);
 
   return { shapes, loading, errors, pickAllInFreq, pickAllInRange };
 }

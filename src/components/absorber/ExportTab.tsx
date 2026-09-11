@@ -112,7 +112,9 @@ function buildFullShapeSpec(shape: LoadedShape, freqGhz: number, thrDb: number) 
     meta: {
       name: shape.name,
       displayName: shape.displayName,
-      source: shape.isReal ? 'CST Simulation' : 'Literature (Synthetic)',
+      provenance: shape.provenance ?? { type: shape.isReal ? "simulated" : "synthetic/demo", source: shape.rawFile ?? "Generated demonstration" },
+      assumptions: "Absorption assumes S21=0; bandwidth is the widest contiguous sampled passing band; not experimental validation",
+      source: shape.isReal ? 'CST Simulation' : 'SYNTHETIC / DEMONSTRATION DATA',
       rawDataFile: shape.rawFile ?? 'N/A',
     },
     geometry: {
@@ -256,6 +258,7 @@ export function buildCSTMacro(
     L(`' Generated : ${ts}`),
     L(`' Shape     : ${bestShape.displayName}`),
     L(`' Geometry  : ${bestShape.geometryType}`),
+    L(`' Source    : ${bestShape.isReal ? 'CST simulation' : 'SYNTHETIC / DEMONSTRATION DATA'}; absorption assumes S21=0`),
     L(`' Best ${bestShape.paramLabel.padEnd(4)} : ${bestP} mm`),
     L(`' Target f  : ${freqGhz} GHz  |  S11 threshold : ${thrDb} dB`),
     best
@@ -773,7 +776,7 @@ function buildMarkdown(shapes: LoadedShape[], freqGhz: number, thrDb: number, ti
       lines.push(`| Best ${shape.paramLabel} | **${b.bestParam_mm} mm** |`);
       lines.push(`| S11 | **${b.s11_dB} dB** |`);
       lines.push(`| Absorption | **${b.absorption_pct}%** |`);
-      lines.push(`| Bandwidth (-10dB) | ${b.bandwidth_GHz > 0 ? `${b.bandwidth_GHz} GHz (${b.bandpassLo_GHz}–${b.bandpassHi_GHz} GHz)` : '< threshold'} |`);
+      lines.push(`| Bandwidth (${thrDb} dB) | ${b.bandwidth_GHz > 0 ? `${b.bandwidth_GHz} GHz (${b.bandpassLo_GHz}–${b.bandpassHi_GHz} GHz)` : '< threshold'} |`);
       lines.push(`| Threshold Status | ${b.passesThreshold ? '✅ PASS' : '⚠️ FAIL'} |`);
     }
 

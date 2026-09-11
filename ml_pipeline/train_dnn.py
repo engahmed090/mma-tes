@@ -6,7 +6,7 @@
   INPUTS   : abs-with-blood1-5ghz-withoutblood.txt   (Air,   eps_r=1.0)
              abs-with-blood1-5ghz-normalblood.txt    (Normal, eps_r=60.0)
              abs-with-blood1-5ghz-cancerblood.txt    (Cancer, eps_r=68.0)
-  FALLBACK : blood_sensing_metrics.json  (pre-computed, always present)
+  PROVENANCE: analytical augmentation requires explicit opt-in; no missing-data fallback
   RANGE    : STRICTLY 1.0 – 5.0 GHz
   INPUTS   : [freq_norm, w_norm, eps_r_norm] → S11 (dB)
   OUTPUTS  : public/models/weights.json + scalers.json
@@ -42,7 +42,7 @@ DATASETS = [
 ]
 
 # ─── Physics-based Lorentzian S11 model ─────────────────────────────────────
-# Resonance parameters from real CST data (blood_sensing_metrics.json)
+# Unverified historical calibration constants; analytical demonstration only
 RESONANCE = {
     1.0:  {"fr": 2.4741, "s11_min": -34.044, "bw": 0.004},   # Air
     60.0: {"fr": 2.4871, "s11_min": -36.057, "bw": 0.0025},  # Normal Blood
@@ -154,10 +154,14 @@ def main():
     ap.add_argument("--data-dir", default=".")
     ap.add_argument("--out",      default="public/models")
     ap.add_argument("--epochs",   type=int, default=800)
+    ap.add_argument("--allow-analytical-augmentation", action="store_true")
     args = ap.parse_args()
     data_dir = os.path.abspath(args.data_dir)
     out_dir  = os.path.abspath(args.out)
-    os.makedirs(out_dir, exist_ok=True)
+    if not args.allow_analytical_augmentation:
+        raise ValueError("Unavailable: legacy width augmentation is analytical, not measured. Explicit --allow-analytical-augmentation is required for demonstration training.")
+    if any(os.path.exists(os.path.join(out_dir, n)) for n in ("weights.json", "scalers.json")):
+        raise ValueError("Output already exists; choose a new directory to preserve trained artifacts.")
 
     print(f"\n[BLOOD BIOSENSOR DNN TRAINER]")
     print(f"  Domain  : {FREQ_MIN_GHZ}–{FREQ_MAX_GHZ} GHz (strict)")
@@ -165,7 +169,7 @@ def main():
     print(f"  ε_r     : {EPS_R_VALUES}")
     print(f"  Output  : {out_dir}\n")
 
-    # ── Step 1: Try to load real CST files ──────────────────────────────────
+    # ── Step 1: Require source CST files (simulated, not measured) ──────────────────────────────────
     loaded_real = {}
     for (variants, eps_r, label) in DATASETS:
         for vname in variants:
@@ -177,7 +181,7 @@ def main():
                     print(f"[OK]   {vname}  → {len(freqs)} pts in 1–5 GHz  (ε_r={eps_r})")
                     break
         if eps_r not in loaded_real:
-            print(f"[INFO] {label} (ε_r={eps_r}) — file not found, using physics model")
+            raise ValueError(f"Unavailable: required source dataset missing for {label}.")
 
     # ── Step 2: Generate training data ──────────────────────────────────────
     # w sweep: 10.0 → 14.0 mm, step 0.5
@@ -190,7 +194,7 @@ def main():
     for w in w_values:
         for eps_r in EPS_R_VALUES:
             if eps_r in loaded_real:
-                # Use real CST data (interpolated)
+                # Use source CST simulation data (interpolated)
                 real_freqs, real_s11s, _ = loaded_real[eps_r]
                 # Interpolate to our freq grid, apply w-scaling from w=10 baseline
                 base_s11 = np.interp(freq_grid, real_freqs, real_s11s)
@@ -212,7 +216,7 @@ def main():
     X = np.array(all_X, dtype=np.float64)
     y = np.array(all_y, dtype=np.float64)
 
-    # Also add any real CST data points at w=10 directly (high-fidelity anchor)
+    # Add source CST samples with the legacy assumed 10mm baseline (unverified)
     for eps_r in EPS_R_VALUES:
         if eps_r in loaded_real:
             real_freqs, real_s11s, _ = loaded_real[eps_r]
@@ -262,10 +266,11 @@ def main():
     pp = pn * (s11_max - s11_min) + s11_min
     rmse = float(np.sqrt(np.mean((pp - y)**2)))
     r2   = 1.0 - float(np.sum((y-pp)**2)) / (float(np.sum((y-y.mean())**2)) + 1e-10)
-    print(f"\n[EVAL] RMSE={rmse:.4f} dB   R²={r2:.6f}")
+    print(f"\n[IN-SAMPLE DEMONSTRATION FIT] RMSE={rmse:.4f} dB   R²={r2:.6f}")
 
     # ── Step 6: Save ─────────────────────────────────────────────────────────
     wdata = {
+        "provenance": {"type": "trained-model", "training_data": "CST plus synthetic analytical width augmentation; assumed 10mm baseline unverified", "evaluation": "in-sample fit; not held-out or clinical accuracy"},
         "layers": layers,
         "activation": "silu",
         "n_inputs": 3,
@@ -283,12 +288,13 @@ def main():
     wp = os.path.join(out_dir, "weights.json")
     sp = os.path.join(out_dir, "scalers.json")
 
-    with open(wp, "w") as f: json.dump(wdata, f)
-    with open(sp, "w") as f: json.dump(scaler, f, indent=2)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(wp, "x") as f: json.dump(wdata, f)
+    with open(sp, "x") as f: json.dump(scaler, f, indent=2)
 
     print(f"[OK]  weights.json → {wp}")
     print(f"[OK]  scalers.json → {sp}")
-    print(f"\n✅  Blood biosensor model ready.  Refresh the browser to use.")
+    print(f"\nDemonstration fit exported; not validated research or clinical accuracy.")
 
 
 if __name__ == "__main__":

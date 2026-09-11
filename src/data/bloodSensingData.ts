@@ -1,17 +1,12 @@
-/**
- * Blood Sensing Data Layer
- * Pre-computed physics data derived from CST Studio Suite simulation files.
- * Pipeline: blood_sensing_pipeline.py → blood_sensing_metrics.json
- *
- * All resonance frequencies and KPIs are real values extracted from CST data.
- */
-
-// ─── RESONANCE PHYSICS (from CST simulation, w = 10 mm patch) ────────────────
+/** Analytical demonstration parameters. Historical calibration values are
+ * unverified: the original blood CST datasets are absent. Not measured evidence. */
+export const SENSING_PROVENANCE = { type: 'analytical', calibration: 'unverified', clinicalValidation: 'unavailable' } as const;
+// ─── UNVERIFIED ANALYTICAL BASELINE (not measured) ────────────────
 export const RESONANCE_DATA = {
   air: {
     fr_ghz:         2.4741,
     s11_at_fr_db:   -34.044,
-    peak_abs_pct:   99.96,
+    peak_abs_pct:   null, // Unavailable: no verified source measurement.
     bw_mhz:         4.0,
     eps_r:          1.0,
     label:          'Air (No Blood)',
@@ -21,7 +16,7 @@ export const RESONANCE_DATA = {
   normal_blood: {
     fr_ghz:         2.4871,
     s11_at_fr_db:   -36.057,
-    peak_abs_pct:   99.98,
+    peak_abs_pct:   null, // Unavailable: no verified source measurement.
     bw_mhz:         2.5,
     eps_r:          60.0,
     label:          'Normal Blood',
@@ -31,7 +26,7 @@ export const RESONANCE_DATA = {
   cancer_blood: {
     fr_ghz:         2.4910,
     s11_at_fr_db:   -35.618,
-    peak_abs_pct:   99.97,
+    peak_abs_pct:   null, // Unavailable: no verified source measurement.
     bw_mhz:         4.0,
     eps_r:          68.0,
     label:          'Blood Cancer',
@@ -40,22 +35,7 @@ export const RESONANCE_DATA = {
   },
 } as const;
 
-// ─── KPIs (from CST pipeline) ─────────────────────────────────────────────────
-export const KPIS = {
-  normal_blood: {
-    delta_eps_r:                59.0,
-    delta_fr_mhz:               -13.00,
-    sensitivity_mhz_per_deps:   0.2203,
-  },
-  cancer_blood: {
-    delta_eps_r:                67.0,
-    delta_fr_mhz:               -16.94,
-    sensitivity_mhz_per_deps:   0.2528,
-  },
-  normal_vs_cancer: {
-    delta_fr_mhz:   -3.94,
-  },
-};
+export const KPIS = { status: 'unavailable', reason: 'Original source datasets are absent.' } as const;
 
 // ─── SUBSTRATE PARAMS ─────────────────────────────────────────────────────────
 export const SUBSTRATE = {
@@ -66,56 +46,18 @@ export const SUBSTRATE = {
   analyte_h_mm: 1.0,
 };
 
-// ─── DNN MODEL METRICS ────────────────────────────────────────────────────────
-export const DNN_METRICS = {
-  framework:    'PyTorch 2.x',
-  architecture: 'BloodDNN [3→256→256→128→64→1]',
-  input_features: ['Patch Width w (mm)', 'Permittivity εr', 'Frequency f (GHz)'],
-  output:       'S₁₁ (dB)',
-  epochs:       100,
-  training_pts: 24000,
-  final_mse:    0.000315,
-  final_rmse:   0.01775,
-  r2_score:     0.9991,
-  loss_history: [
-    { epoch: 10,  loss: 0.000317 },
-    { epoch: 20,  loss: 0.000315 },
-    { epoch: 30,  loss: 0.000314 },
-    { epoch: 40,  loss: 0.000314 },
-    { epoch: 50,  loss: 0.000314 },
-    { epoch: 60,  loss: 0.000312 },
-    { epoch: 70,  loss: 0.000312 },
-    { epoch: 80,  loss: 0.000316 },
-    { epoch: 90,  loss: 0.000329 },
-    { epoch: 100, loss: 0.000313 },
-  ],
-  layers: [
-    { name: 'Input',   neurons: 3,   activation: '—',    description: '[w_norm, εr_norm, f_norm]' },
-    { name: 'Dense 1', neurons: 256, activation: 'SiLU', description: 'Wide feature extraction' },
-    { name: 'Dense 2', neurons: 256, activation: 'SiLU', description: 'Deep pattern learning' },
-    { name: 'Dense 3', neurons: 128, activation: 'SiLU', description: 'Resonance encoding' },
-    { name: 'Dense 4', neurons: 64,  activation: 'SiLU', description: 'Spectral compression' },
-    { name: 'Output',  neurons: 1,   activation: '—',    description: 'S₁₁ (dB)' },
-  ],
-  classical_ml_comparison: {
-    models:   ['Random Forest', 'Gradient Boosting', 'DNN (Ours)'],
-    rmse:     [2.60,  2.55,  0.018],
-    mae:      [1.28,  1.26,  0.009],
-    r2:       [0.178, 0.209, 0.999],
-  },
-};
+export const DNN_METRICS = { status: 'unavailable', reason: 'No verified training/evaluation provenance for this analytical model.' } as const;
 
-// ─── LORENTZIAN S11 MODEL (physics-based DNN extrapolation) ──────────────────
 /**
  * Generates a Lorentzian-shaped S11 curve for a given (w, eps_r) pair.
  * fr(w, eps_r) = fr0 * (10/w)^0.5 / sqrt(eps_eff)
  * eps_eff = 1 + (eps_r - 1) * 0.25  (partial field confinement)
  */
-export function predictS11Curve(
+export function analyticalS11Curve(
   w_mm: number,
   eps_r: number,
   freqPoints: number[] = DEFAULT_FREQ_POINTS
-): { freq: number[]; s11: number[]; absorption: number[]; fr: number } {
+): { freq: number[]; s11: number[]; absorption: number[]; fr: number; provenance: typeof SENSING_PROVENANCE } {
   const fr0   = RESONANCE_DATA.air.fr_ghz;
   const bw    = RESONANCE_DATA.air.bw_mhz / 1000.0;
   const s11m  = RESONANCE_DATA.air.s11_at_fr_db;
@@ -132,7 +74,7 @@ export function predictS11Curve(
 
   const absorption = s11.map(s => Math.max(0, 1.0 - Math.pow(10, s / 10.0)));
 
-  return { freq: freqPoints, s11, absorption, fr };
+  return { freq: freqPoints, s11, absorption, fr, provenance: SENSING_PROVENANCE };
 }
 
 // ─── DEFAULT FREQUENCY AXIS (2.0–4.5 GHz, 300 pts) ──────────────────────────
@@ -153,7 +95,7 @@ export const SHAPE_OPTIONS = [
 
 // ─── SENSITIVITY TABLE DATA ───────────────────────────────────────────────────
 export const SENSITIVITY_TABLE = [
-  { sample: 'Air (Reference)', eps_r: 1,  fr_ghz: 2.4741, delta_fr_mhz: 0,     sensitivity: '—',    color: '#00D4FF' },
-  { sample: 'Normal Blood',    eps_r: 60, fr_ghz: 2.4871, delta_fr_mhz: 13.00, sensitivity: '0.220', color: '#00FF88' },
-  { sample: 'Blood Cancer',    eps_r: 68, fr_ghz: 2.4910, delta_fr_mhz: 16.94, sensitivity: '0.253', color: '#FF4466' },
-];
+  { sample: 'Air (Reference)', eps_r: 1, color: '#00D4FF' },
+  { sample: 'Normal Blood (assumed permittivity)', eps_r: 60, color: '#00FF88' },
+  { sample: 'Cancer Blood (assumed permittivity)', eps_r: 68, color: '#FF4466' },
+].map(row => ({ ...row, fr_ghz: null, delta_fr_mhz: null, sensitivity: 'Unavailable', provenance: 'unverified' }));

@@ -1,3 +1,4 @@
+import SafeChatMarkdown from './SafeChatMarkdown';
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +48,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
   }, [messages]);
 
   const buildKnowledge = () => {
-    const lines: string[] = ['AHMED\'S ABSORBER SHAPES — REAL CST DATA\n'];
+    const lines: string[] = ['AHMED\'S ABSORBER SHAPES — CST SIMULATION DATA (not measured experiments)\n'];
     for (const s of shapes) {
       if (!s.isReal) continue;
       lines.push(`SHAPE: ${s.displayName}`);
@@ -192,15 +193,6 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
     }
   };
 
-  const renderContent = (content: string) => {
-    return content.split('\n').map((line, i) => {
-      let rendered = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      rendered = rendered.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-primary underline">$1</a>');
-      rendered = rendered.replace(/`(.*?)`/g, '<code class="bg-muted px-1 rounded text-xs">$1</code>');
-      return <div key={i} dangerouslySetInnerHTML={{ __html: rendered || '&nbsp;' }} />;
-    });
-  };
-
   return (
     <div className="space-y-4 tab-content-enter">
       <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -211,6 +203,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
           </span>
         )}
       </h2>
+
+      <p role="note" className="text-sm text-muted-foreground">
+        AI-generated literature summaries may contain unverified claims. Verify technical
+        values against the cited original source before research use. These responses are
+        not clinical, experimental, or independently validated evidence.
+      </p>
 
       <div className="flex gap-2">
         <Button variant={brain === 'cst' ? 'default' : 'outline'} size="sm" onClick={() => setBrain('cst')}>
@@ -252,7 +250,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
         inputs={aiInputs}
         outputs={aiOutputs}
         elapsed={elapsed}
-        title="AI Expert — Neural Processing"
+        title="AI Expert — Request Progress"
       />
 
       <div className="rounded-lg border border-border bg-secondary/20 h-96 overflow-y-auto p-4 space-y-4">
@@ -266,7 +264,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
             <div className={`max-w-[80%] rounded-lg px-4 py-3 text-sm ${
               m.role === 'user' ? 'bg-primary text-primary-foreground whitespace-pre-wrap' : 'bg-card text-foreground border border-border'
             }`}>
-              {m.role === 'assistant' ? renderContent(m.content) : m.content}
+              {m.role === 'assistant' ? <SafeChatMarkdown content={m.content} /> : m.content}
             </div>
           </div>
         ))}

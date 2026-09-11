@@ -1,3 +1,4 @@
+import ExperimentalLab from '@/components/experimental/ExperimentalLab';
 import { streamlitBase } from '@/lib/serviceConfig';
 import React, { useState } from 'react';
 import { useShapeData } from '@/hooks/useShapeData';
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const TABS = [
+  { id: 'experimental', label: 'Experimental Sensing Lab', icon: Cpu },
   { id: 'find', label: '🔍 Find Best Absorber', icon: Search },
   { id: 'inverse', label: '🔄 Inverse Design', icon: RefreshCw },
   { id: 'bio', label: '🩸 Blood Cancer Sensing', icon: HeartPulse },
@@ -30,7 +32,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('find');
   const [bioSubTab, setBioSubTab] = useState('controls');
   const [thrDb, setThrDb] = useState(-10);
-  const [includePaper, setIncludePaper] = useState(true);
+  const [includePaper, setIncludePaper] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { shapes, loading, errors, pickAllInFreq, pickAllInRange } = useShapeData(includePaper);
@@ -45,12 +47,13 @@ const Index = () => {
               🧲 Metamaterial Absorber AI Platform <span className="text-sm font-normal text-primary">v5</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              CST-trained neural networks for absorber parameter prediction, optimization &amp; thesis reporting
+              CST simulation explorer · analytical demonstrations · model availability checked per request
             </p>
+            <p className="text-xs text-muted-foreground">CST results are simulated, not measured. Absorption assumes negligible transmission; bandwidth uses contiguous sampled bands. No clinical validation is claimed.</p>
             <div className="flex flex-wrap gap-1.5 mt-3">
               <span className="badge badge-blue">Forward: (Freq,P)→S11</span>
               <span className="badge badge-green">Inverse: (Freq,S11)→P</span>
-              <span className="badge badge-amber">CST Brain: Auto-Design Fallback</span>
+              <span className="badge badge-amber">No synthetic fallback for unavailable models</span>
               <span className="badge badge-purple">Blood Sensing: εr∈{'{1,60,68}'}</span>
             </div>
           </div>
@@ -71,7 +74,7 @@ const Index = () => {
             </div>
             <div className="flex items-center gap-2">
               <Checkbox checked={includePaper} onCheckedChange={(v) => setIncludePaper(!!v)} id="paper" />
-              <label htmlFor="paper" className="text-sm text-muted-foreground">Include literature shapes</label>
+              <label htmlFor="paper" className="text-sm text-muted-foreground">Include SYNTHETIC / DEMONSTRATION DATA in searches</label>
             </div>
             <div className="text-xs text-muted-foreground">
               {loading ? 'Loading...' : `${shapes.length} shapes loaded`}
@@ -101,14 +104,14 @@ const Index = () => {
 
           {/* Tab content */}
           <div className="p-4 md:p-6">
-            {loading ? (
+            {activeTab === 'experimental' ? <ExperimentalLab /> : loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mr-3" />
                 <span className="text-muted-foreground">Loading CST data files...</span>
               </div>
             ) : shapes.length === 0 ? (
               <div className="text-center py-20">
-                <p className="text-destructive text-lg">⚠️ No shapes loaded. Enable literature shapes or check data files.</p>
+                <p className="text-destructive text-lg">⚠️ No shapes loaded. Check source data files; synthetic demonstrations require explicit opt-in.</p>
               </div>
             ) : (
               <>
