@@ -20,7 +20,10 @@ it('reports an unavailable local service instead of a JSON parsing error',async(
 it('routes APIs to unavailable JSON before SPA fallback and preserves static assets',()=>{
   const config=JSON.parse(readFileSync(resolve('vercel.json'),'utf8'));
   expect(config.framework).toBe('vite');expect(config.outputDirectory).toBe('dist');
-  const [api,filesystem,spa]=config.routes;
+  const [chat,api,filesystem,spa]=config.routes;
+  expect(chat.dest).toBe('/api/ai-chat');
+  expect(new RegExp('^'+chat.src+'$').test('/api/ai-chat')).toBe(true);
+  expect(chat.status).toBeUndefined();
   for(const path of ['/api','/api/experimental/samples','/api/predict/inverse']) expect(new RegExp('^'+api.src+'$').test(path)).toBe(true);
   expect(api.status).toBe(503);expect(filesystem.handle).toBe('filesystem');expect(spa.dest).toBe('/index.html');
   const unavailable=JSON.parse(readFileSync(resolve('public'+api.dest),'utf8'));

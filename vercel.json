@@ -6,6 +6,10 @@
   "outputDirectory": "dist",
   "routes": [
     {
+      "src": "/api/ai-chat/?",
+      "dest": "/api/ai-chat"
+    },
+    {
       "src": "/api(?:/.*)?",
       "dest": "/service-unavailable.json",
       "status": 503

@@ -139,10 +139,14 @@ def cross_validate(records,schema,kind,blood,seed):
         except ValueError as e: metrics.append({"status":"unavailable","reason":str(e)})
     return metrics
 
-def train(records, representation="physical", allow_images=False, seed=42, reference=None, include_bandwidth=False, margin_threshold=1.0, assignment=None):
+def train(records, representation="physical", allow_images=False, seed=42, reference=None, include_bandwidth=False, margin_threshold=1.0, assignment=None, progress=None):
+    report=progress or (lambda stage: None)
+    report("Preparing dataset")
+    report("Validating groups")
     validate_training(records,allow_images)
     if representation not in ("physical","curve"): raise ValueError("Unknown representation.")
     if not np.isfinite(margin_threshold) or margin_threshold<0: raise ValueError("Invalid abstention margin.")
+    report("Creating train/validation/test split")
     groups=check_leakage(records,assignment) if assignment else grouped_split(records,seed)
     partitions={s:[r for r in records if groups[r["specimen_group"]]==s] for s in ["TRAIN","VALIDATION","TEST"]}
     blood=records[0]["experiment_type"]=="blood"
@@ -163,13 +167,18 @@ def train(records, representation="physical", allow_images=False, seed=42, refer
     if include_bandwidth: schema["columns"].append("bandwidth_ghz")
     matrices={s:matrix(rows,schema) for s,rows in partitions.items()}; X,y,_=matrices["TRAIN"]
     candidates=["logistic","centroid"] if blood else ["mean","ridge:0.1","ridge:1","ridge:10"]
+    report("Training candidate models")
     fits={k:fit(X,y,k) for k in candidates}; valX,valy,_=matrices["VALIDATION"]
+    report("Evaluating validation results")
     validation={k:evaluate(valy,scores(m,valX),blood) for k,m in fits.items()}
     objective=lambda k: -(validation[k]["recall"]+validation[k]["specificity"])/2 if blood else validation[k]["rmse"]
     chosen=min(candidates,key=objective); model=fits[chosen]
+    report("Evaluating held-out test set")
     testX,testy,_=matrices["TEST"]; test=evaluate(testy,scores(model,testX),blood)
     eligible=all(validation[chosen][k] is not None and validation[chosen][k]>=.8 and test[k] is not None and test[k]>=.8 for k in ["recall","specificity"]) if blood else len(np.unique(y))>=3
+    report("Saving dataset snapshot")
     snapshot=storage.snapshot(records); model_id=str(uuid4())
+    report("Evaluating TRAIN grouped cross-validation")
     result={"model_id":model_id,"model_type":chosen,"task":records[0]["experiment_type"],"created_at":datetime.now(timezone.utc).isoformat(),
         "dataset_version":snapshot,"feature_schema":schema,"frequency_range":[lo,hi],"preprocessing":"Mean/std fit on TRAIN specimens only; mean replicate features per specimen",
         "counts":{s:{"scans":len(partitions[s]),"specimens":len(matrices[s][2])} for s in partitions},
@@ -183,6 +192,7 @@ def train(records, representation="physical", allow_images=False, seed=42, refer
         "provenance_limitations":["Research only; not clinically validated.","Reference labels and specimen identity are user-supplied, not independently verified by software.",
         "Scores are uncalibrated margins, never probabilities. Minimum counts do not establish statistical reliability.","Held-out test must not be reused for iterative tuning; repeated snapshots can reuse specimens.",
         "Cancer-type inference unavailable; binary reference-class task only."]}
+    report("Saving model")
     storage.write_new(storage.ROOT/"models"/(model_id+".json"),result)
     storage.write_new(storage.ROOT/"models"/(model_id+".card.json"),{k:v for k,v in result.items() if k!="model"})
     return {k:v for k,v in result.items() if k!="model"}

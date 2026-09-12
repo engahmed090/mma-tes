@@ -23,7 +23,7 @@ const DimTable: React.FC<DimTableProps> = ({ spec, pBest }) => {
     ['Ground Thickness', `${fixed.ground_thick_mm ?? '—'} mm`],
     ['Substrate Material', fixed.substrate_material ?? '—'],
     ['Substrate Thickness', `${fixed.substrate_thick_mm ?? fixed.substrate_visual_mm ?? '—'} mm`],
-    [paramName, `► ${pBest.toFixed(4)} mm`],
+    ...(mode === 'fixed' ? [['Sweep parameter', 'Not applicable — fixed source geometry'] as [string, string]] : [[paramName, `► ${pBest.toFixed(4)} mm`] as [string, string]]),
   ];
 
   if (gtype.includes('triangle')) {

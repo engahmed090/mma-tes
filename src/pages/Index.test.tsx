@@ -10,5 +10,6 @@ vi.mock('@/components/absorber/DNNPredictorTab', () => ({ default: () => null })
 import Index from './Index';
 it('renders the full permittivity set literally', () => {
   render(<Index />);
+  expect(screen.queryByRole('button', { name: /DNN S11 Predictor/ })).toBeNull();
   expect(screen.getByText('Blood Sensing: εr∈{1,60,68}')).toBeTruthy();
 });

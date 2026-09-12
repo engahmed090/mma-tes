@@ -1,45 +1,29 @@
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-vi.mock('recharts',()=>{
- const C=({children}:{children?:React.ReactNode})=><div>{children}</div>;
- return Object.fromEntries(['LineChart','Line','XAxis','YAxis','Tooltip','Legend','ResponsiveContainer','ReferenceDot','ScatterChart','Scatter'].map(k=>[k,C]));
-});
+vi.mock('recharts',()=>{const C=({children}:{children?:React.ReactNode})=><div>{children}</div>;return Object.fromEntries(['LineChart','Line','XAxis','YAxis','Tooltip','Legend','ResponsiveContainer','ReferenceDot','ScatterChart','Scatter'].map(k=>[k,C]));});
 import ExperimentalLab from './ExperimentalLab';
+import ModelDashboard from './ModelDashboard';
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
-it('starts with no fabricated results, no image training opt-in and explicit approval required',async()=>{
- const fetcher=vi.fn().mockResolvedValue({ok:true,json:async()=>[]});vi.stubGlobal('fetch',fetcher);
- render(<ExperimentalLab/>);
- await waitFor(()=>expect(fetcher).toHaveBeenCalledTimes(2));
- expect(screen.getByRole('note').textContent).toContain('must not be used to diagnose or rule out cancer');
- expect(screen.getByRole('status').textContent).toContain('No result');
- expect(screen.getByRole('button',{name:/Save approved anonymous/})).toBeDisabled();
- expect(screen.getByRole('checkbox',{name:/Explicitly allow reviewed IMAGE_EXTRACTED/})).not.toBeChecked();
- expect(screen.getByText(/Cancer-type model output: Unavailable/)).toBeTruthy();
- expect(fetcher.mock.calls.every(([url])=>String(url).startsWith('/api/experimental/'))).toBe(true);
+const setup=()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>[]}));render(<ExperimentalLab/>);};
+const step=(name:string)=>fireEvent.click(screen.getByRole('button',{name:new RegExp(name)}));
+it('starts with three task cards, compact status and no fabricated metrics',async()=>{
+ setup();expect(screen.getByRole('button',{name:'Start Blood Research'})).toBeTruthy();expect(screen.getByRole('button',{name:'Start Glucose Analysis'})).toBeTruthy();expect(screen.getByRole('button',{name:'Start Nitrate Analysis'})).toBeTruthy();
+ expect(screen.queryByLabelText('Raw VNA file')).toBeNull();await waitFor(()=>expect(screen.queryByRole('alert')).toBeNull());
+ fireEvent.click(screen.getByRole('button',{name:'Start Blood Research'}));expect(screen.queryByLabelText('fmin')).toBeNull();step('Sample Metadata');expect(screen.getByRole('button',{name:/Save approved anonymous/})).toBeDisabled();
+ step('Dataset & Training');expect(screen.getByRole('checkbox',{name:/Explicitly allow reviewed IMAGE_EXTRACTED/})).not.toBeChecked();expect(screen.getByRole('status').textContent).toContain('Metrics unavailable');
 });
-it('provides separate concentration collection without inventing a target',async()=>{
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>[]}));
- render(<ExperimentalLab/>);
- fireEvent.change(screen.getByLabelText('Experiment'),{target:{value:'glucose'}});
- expect(screen.queryByText(/Optional independently established cancer type/)).toBeNull();
- expect(screen.getByText(/Leave blank for unknown samples/)).toBeTruthy();
- expect(screen.getByRole('status').textContent).toContain('unavailable');
- await waitFor(()=>expect(screen.queryByRole('alert')).toBeNull());
+it.each(['Glucose','Nitrate'])('provides %s concentration collection without inventing targets',async task=>{
+ setup();fireEvent.click(screen.getByRole('button',{name:'Start '+task+' Analysis'}));step('Sample Metadata');expect(screen.queryByText(/Optional independently established cancer type/)).toBeNull();expect(screen.getByText(/Leave blank for unknown samples/)).toBeTruthy();expect(screen.getByLabelText('Known reference concentration').getAttribute('value')).toBe('');
 });
-
-it('invalidates previous approval when a new raw import fails',async()=>{
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>[]}));
- render(<ExperimentalLab/>);
- const good=new File(['fixture'],'fixture.csv');
- Object.defineProperty(good,'text',{value:async()=>'freq_GHz,S11_dB\n'+Array.from({length:8},(_,i)=>`${1+i*.1},-20`).join('\n')});
+it('invalidates approval when a replacement raw import fails',async()=>{
+ setup();fireEvent.click(screen.getByRole('button',{name:'Start Blood Research'}));
+ const good=new File(['fixture'],'fixture.csv');Object.defineProperty(good,'text',{value:async()=>'freq_GHz,S11_dB\n'+Array.from({length:8},(_,i)=>`${1+i*.1},-20`).join('\n')});
  fireEvent.change(screen.getByLabelText('Raw VNA file'),{target:{files:[good]}});
- const approval=screen.getByRole('checkbox',{name:/I reviewed the curve/});
- await waitFor(()=>expect(approval).not.toBeDisabled());
- fireEvent.click(approval);
- expect(screen.getByRole('button',{name:/Save approved anonymous/})).not.toBeDisabled();
- const bad=new File(['bad'],'ambiguous.txt');Object.defineProperty(bad,'text',{value:async()=>'1 -20\n2 -30'});
- fireEvent.change(screen.getByLabelText('Raw VNA file'),{target:{files:[bad]}});
- await waitFor(()=>expect(screen.getByRole('alert')).toBeTruthy());
- expect(screen.getByRole('button',{name:/Save approved anonymous/})).toBeDisabled();
- expect(approval).not.toBeChecked();
+ await waitFor(()=>expect(screen.getByRole('checkbox',{name:/I reviewed the curve/})).not.toBeDisabled());fireEvent.click(screen.getByRole('checkbox',{name:/I reviewed the curve/}));
+ step('Import Measurement');const bad=new File(['bad'],'bad.txt');Object.defineProperty(bad,'text',{value:async()=>'1 -20\n2 -30'});fireEvent.change(screen.getByLabelText('Raw VNA file'),{target:{files:[bad]}});
+ await waitFor(()=>expect(screen.getByRole('alert')).toBeTruthy());step('Sample Metadata');expect(screen.getByRole('button',{name:/Save approved anonymous/})).toBeDisabled();
+});
+it('shows unavailable metrics, preserves genuine zero, and separates validation from test',()=>{
+ render(<ModelDashboard card={{task:'glucose',model_type:'ridge',metrics:{validation_candidates:{ridge:{mae:0}},held_out_test:{mae:2}},counts:{}}}/>);
+ expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(1);expect(screen.getByText('0')).toBeTruthy();expect(screen.getByText('2')).toBeTruthy();expect(screen.getByText(/HELD-OUT TEST/)).toBeTruthy();expect(screen.getByText(/^VALIDATION/)).toBeTruthy();
 });

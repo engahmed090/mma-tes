@@ -113,3 +113,28 @@ def test_cross_validation_never_uses_a_held_out_reference():
     folds=ml.cross_validate(rows,schema,"logistic",True,42)
     assert sum(m.get("status")=="unavailable" for m in folds)==1
     assert any("reference leakage" in m.get("reason","") for m in folds)
+
+def test_training_progress_is_real_and_does_not_report_success_on_failure(local):
+    events=[]
+    with pytest.raises(ValueError):
+        ml.train([],progress=events.append)
+    assert events==["Preparing dataset","Validating groups"]
+    assert not list(local.glob("models/*"))
+    events=[]
+    card=ml.train([record(i) for i in range(20)],progress=events.append)
+    assert events.index("Training candidate models")<events.index("Evaluating held-out test set")<events.index("Saving model")
+    assert (local/"models"/(card["model_id"]+".card.json")).is_file()
+
+
+def test_training_job_failure_remains_unavailable(local):
+    import time
+    client=TestClient(main.app)
+    response=client.post("/api/experimental/training-jobs",json={"sample_ids":[str(uuid4())]})
+    assert response.status_code==202
+    for _ in range(200):
+        state=client.get("/api/experimental/training-jobs/"+response.json()["job_id"]).json()
+        if state["status"]!="running": break
+        time.sleep(.01)
+    assert state["status"]=="failed"
+    assert "result" not in state
+    assert state["error"]=="Unknown sample ID."

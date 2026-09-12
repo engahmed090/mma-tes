@@ -1,3 +1,5 @@
+import { chatText } from '@/lib/chatStream';
+import { serviceUrl } from '@/lib/serviceConfig';
 import SafeChatMarkdown from './SafeChatMarkdown';
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -29,7 +31,7 @@ const SUGGESTIONS_REF = [
   "Design Ka-band metamaterial absorber 30 GHz",
 ];
 
-const EDGE_FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
+const EDGE_FN_URL = serviceUrl(import.meta.env.VITE_AI_CHAT_API_URL) || '/api/ai-chat';
 
 const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
   const [brain, setBrain] = useState<'cst' | 'ref'>('cst');
@@ -92,19 +94,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
     setAiOutputs([]);
     setStage('input');
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
     try {
-      await new Promise(r => setTimeout(r, 300));
-      setStage('preprocessing');
-
-      await new Promise(r => setTimeout(r, 300));
       setStage('network');
 
       const resp = await fetch(EDGE_FN_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           brain,
@@ -119,61 +119,21 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
       }
 
       // Read which provider answered
-      const usedProvider = resp.headers.get('X-AI-Provider') || 'unknown';
+      const usedProvider = [resp.headers.get('X-AI-Provider'), resp.headers.get('X-AI-Model')].filter(Boolean).join(' · ') || 'Provider unavailable';
       setProvider(usedProvider);
 
       if (!resp.body) throw new Error('No response body');
 
       setStage('output');
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
       let assistantSoFar = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let newlineIdx: number;
-        while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
-          let line = buffer.slice(0, newlineIdx);
-          buffer = buffer.slice(newlineIdx + 1);
-
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantSoFar += content;
-              setMessages(prev => {
-                const last = prev[prev.length - 1];
-                if (last?.role === 'assistant') {
-                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
-                }
-                return [...prev, { role: 'assistant', content: assistantSoFar }];
-              });
-            }
-          } catch {
-            buffer = line + '\n' + buffer;
-            break;
-          }
-        }
-      }
-
-      if (!assistantSoFar) {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'No response received. Please try again.' }]);
+      for await (const text of chatText(resp.body)) {
+        assistantSoFar += text;
+        setMessages([...newMessages, { role: 'assistant', content: assistantSoFar }]);
       }
 
       // Set real outputs
-      const modelLabel = usedProvider === 'openrouter' ? 'DeepSeek-R1' : 'LLaMA-3.3-70B';
+      const modelLabel = usedProvider;
       setAiOutputs([
         { label: 'Response', value: `${assistantSoFar.length} chars` },
         { label: 'Model', value: modelLabel },
@@ -189,6 +149,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
       setStage('complete');
       stopTimer();
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };
@@ -199,7 +160,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ shapes, thrDb }) => {
         <Bot className="w-5 h-5 text-primary" /> AI Expert Chat
         {provider && (
           <span className="text-[10px] font-mono text-muted-foreground bg-muted/30 px-2 py-0.5 rounded">
-            via {provider === 'openrouter' ? 'DeepSeek-R1' : 'LLaMA-3.3-70B'}
+            via {provider}
           </span>
         )}
       </h2>

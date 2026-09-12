@@ -11,8 +11,9 @@ avoids package-manager autodetection differences. No scientific backend is deplo
 Native build packages use their platform packages; validate a deployment build rather
 than assuming a cached local install proves every platform works.
 
-The routes preserve static files and support React SPA navigation. /api requests
-return an explicit 503 unavailable response instead of index.html. Public build
+The routes first dispatch `/api/ai-chat` to the Node Vercel function. Other `/api`
+requests return an explicit 503 unavailable response instead of index.html. Static
+files and React SPA navigation remain supported. See CHAT_DEPLOYMENT.md for chat secrets. Public build
 metadata at /deployment.json reports VERCEL_GIT_COMMIT_SHA and branch, allowing
 the production alias to be checked against GitHub after deployment.
 

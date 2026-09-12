@@ -39,14 +39,13 @@ class TrainRequest(BaseModel):
     include_bandwidth: bool = False
     margin_threshold: float = Field(default=1.,ge=0,allow_inf_nan=False)
 
-@router.post("/train")
-def train(request: TrainRequest):
+def run_training(request: TrainRequest, progress=None):
     try:
         records=storage.samples(); rows=[r for r in records if r["sample_id"] in request.sample_ids]
         if len(rows)!=len(set(request.sample_ids)): raise ValueError("Unknown sample ID.")
         reference=next((r for r in rows if r["sample_id"]==request.reference_sample_id),None)
         if request.reference_sample_id and reference is None: raise ValueError("Reference must be selected in the dataset.")
-        return ml.train(rows, request.representation, request.allow_images, request.seed, reference, request.include_bandwidth, request.margin_threshold)
+        return ml.train(rows, request.representation, request.allow_images, request.seed, reference, request.include_bandwidth, request.margin_threshold, progress=progress)
     except (ValueError,OSError) as e: raise HTTPException(422,str(e)) from e
 
 @router.get("/models")
@@ -64,3 +63,49 @@ def predict(request: PredictionRequest):
     if not path.is_file(): raise HTTPException(404,"Experimental model unavailable.")
     try: return ml.predict(json.loads(path.read_text(encoding="utf-8")),request.sample.model_dump(mode="json"),request.margin_threshold)
     except ValueError as e: raise HTTPException(422,str(e)) from e
+
+
+@router.post("/train")
+def train(request: TrainRequest):
+    return run_training(request)
+
+# One local training worker, bounded job history. No measurements leave this process.
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from uuid import uuid4
+import copy
+_executor = ThreadPoolExecutor(max_workers=1)
+_jobs = {}
+_jobs_lock = Lock()
+
+@router.post("/training-jobs", status_code=202)
+def start_training_job(request: TrainRequest):
+    with _jobs_lock:
+        if any(j["status"] == "running" for j in _jobs.values()):
+            raise HTTPException(409, "A local training run is already in progress.")
+        while len(_jobs) >= 20:
+            _jobs.pop(next(iter(_jobs)))
+        job_id = str(uuid4())
+        _jobs[job_id] = {"status": "running", "stage": "Queued", "events": []}
+    def update(stage):
+        with _jobs_lock:
+            _jobs[job_id]["stage"] = stage
+            _jobs[job_id]["events"].append(stage)
+    def work():
+        try:
+            result = run_training(request, update)
+            with _jobs_lock:
+                _jobs[job_id].update(status="complete", stage="Complete", result=result)
+        except Exception as exc:
+            with _jobs_lock:
+                _jobs[job_id].update(status="failed", stage="Failed", error=str(exc.detail) if isinstance(exc, HTTPException) else "Local training failed; no validated result is available.")
+    _executor.submit(work)
+    return {"job_id": job_id}
+
+@router.get("/training-jobs/{job_id}")
+def training_job(job_id: UUID):
+    with _jobs_lock:
+        job = _jobs.get(str(job_id))
+        if job is None:
+            raise HTTPException(404, "Training job unavailable; local server may have restarted.")
+        return copy.deepcopy(job)

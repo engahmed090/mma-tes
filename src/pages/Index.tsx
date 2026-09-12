@@ -7,7 +7,6 @@ import InverseDesignTab from '@/components/absorber/InverseDesignTab';
 import BioSensingTab from '@/components/absorber/BioSensingTab';
 import ChatTab from '@/components/absorber/ChatTab';
 import ExportTab from '@/components/absorber/ExportTab';
-import DNNPredictorTab from '@/components/absorber/DNNPredictorTab';
 import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2, Cpu, MonitorPlay, BrainCircuit } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,9 +16,8 @@ const TABS = [
   { id: 'experimental', label: 'Experimental Sensing Lab', icon: Cpu },
   { id: 'find', label: '🔍 Find Best Absorber', icon: Search },
   { id: 'inverse', label: '🔄 Inverse Design', icon: RefreshCw },
-  { id: 'bio', label: '🩸 Blood Cancer Sensing', icon: HeartPulse },
+  { id: 'bio', label: 'Analytical Sensing', icon: HeartPulse },
   { id: 'chat', label: '🤖 AI Expert Chat', icon: Bot },
-  { id: 'dnn', label: '🧠 DNN S11 Predictor', icon: BrainCircuit },
   { id: 'report', label: '📦 Export / Download', icon: Download },
 ];
 
@@ -29,7 +27,7 @@ const BIO_SUB_TABS = [
 ];
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState('find');
+  const [activeTab, setActiveTab] = useState('experimental');
   const [bioSubTab, setBioSubTab] = useState('controls');
   const [thrDb, setThrDb] = useState(-10);
   const [includePaper, setIncludePaper] = useState(false);
@@ -165,7 +163,6 @@ const Index = () => {
                 </div>
 
                 {activeTab === 'chat' && <ChatTab shapes={shapes} thrDb={thrDb} />}
-                {activeTab === 'dnn' && <DNNPredictorTab />}
                 {activeTab === 'report' && <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
               </>
             )}

@@ -1,3 +1,4 @@
+import { candidateGeometry, candidateSource, candidateGeometryWarning } from '@/lib/absorberCandidate';
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -171,8 +172,8 @@ const FindBestTab: React.FC<FindBestTabProps> = ({ shapes, pickAllInFreq, pickAl
                       <tr key={i} className="border-t border-border/50 hover:bg-secondary/20">
                         <td className="py-2 px-3">{i < 3 ? medals[i] : `#${i + 1}`}</td>
                         <td className="py-2 px-3 text-foreground">{r.item.displayName.slice(0, 40)}</td>
-                        <td className="py-2 px-3">{r.item.isReal ? 'CST Raw' : 'SYNTHETIC / DEMONSTRATION DATA'}</td>
-                        <td className="py-2 px-3 text-right">{r.best?.p?.toFixed(4)}</td>
+                        <td className="py-2 px-3">{candidateSource(r.item)}</td>
+                        <td className="py-2 px-3 text-right">{r.item.fixedCurve?'Fixed geometry':r.best?.p?.toFixed(4)}</td>
                         <td className="py-2 px-3 text-right">{s11Val.toFixed(2)}</td>
                         <td className="py-2 px-3 text-right">{absPct.toFixed(1)}%</td>
                         <td className="py-2 px-3 text-center">{searchResultStatus(r.best)}</td>
@@ -226,9 +227,9 @@ function ShapeResultCard({ result, idx, thrDb, vline, vspan }: { result: any; id
             <DimTable spec={{ fixed: result.item.fixed, paramLabel: result.item.paramLabel, paramMode: result.item.paramMode, geometryType: result.item.geometryType }} pBest={pBest} />
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-2">🧊 3D Structure</h4>
+                {candidateGeometryWarning(result.item,pBest)&&<p role="note" className="text-xs text-amber-300 mb-3">{candidateGeometryWarning(result.item,pBest)}</p>}
               <Absorber3D
-                shapeSpec={{ geometryType: result.item.geometryType, paramMode: result.item.paramMode, paramLabel: result.item.paramLabel, fixed: result.item.fixed }}
-                pValueMm={pBest}
+                {...candidateGeometry(result.item, pBest)}
                 height={340}
               />
             </div>

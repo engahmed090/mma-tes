@@ -1,7 +1,7 @@
 # MMA project: local setup and readiness
 
 React/Vite frontend, FastAPI/PyTorch prediction service, and separate optional
-Supabase chat and Streamlit services. This repository is not research-validated.
+Vercel server-side chat and optional Streamlit service. This repository is not research-validated.
 
 ## Frontend
 
@@ -13,7 +13,7 @@ pnpm dev
 ```
 
 Open http://127.0.0.1:8080. The dev server binds to loopback and proxies `/api`
-to http://127.0.0.1:8000. The checked-in lockfile records the installed dependency
+to http://127.0.0.1:8000, except `/api/ai-chat`, which runs the same Node handler used in Vercel. The checked-in lockfile records the installed dependency
 graph; no dependency version upgrades were requested for Stage 3. pnpm may ask
 for dependency build-script approval: review esbuild and @swc/core before allowing
 those build tools. Do not approve unrelated scripts blindly.
@@ -46,9 +46,10 @@ projects. Commented example Supabase entries do not override it with blank value
 
 | Variable | Where | Default / purpose |
 | --- | --- | --- |
+| VITE_AI_CHAT_API_URL | Vite env | Empty: `/api/ai-chat`; optional HTTPS endpoint with its own CORS policy |
 | VITE_PREDICTION_API_URL | Vite env | Empty: same-origin `/api`; optional absolute HTTP(S) service base |
 | VITE_STREAMLIT_URL | Vite env | Empty: live twin disabled; set only for a separately running service |
-| VITE_SUPABASE_URL | Vite env | Existing public project URL; used by chat |
+| VITE_SUPABASE_URL | Vite env | Legacy public project URL; no longer used by normal chat |
 | VITE_SUPABASE_PUBLISHABLE_KEY | Vite env | Public client key; never a service-role key |
 | VITE_SUPABASE_PROJECT_ID | Vite env | Public project identifier |
 | PREDICTION_PROXY_TARGET | Shell running Vite | http://127.0.0.1:8000; development only |
@@ -163,3 +164,11 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the master production branch, pinned buil
 commands, SPA routing, environment configuration and deployment-SHA verification.
 The hosted lab supports browser import/preview; experimental saving, training and
 inference remain local-only and are blocked before transmitting data from a hosted page.
+
+## Platform upgrade
+
+See [CHAT_DEPLOYMENT.md](CHAT_DEPLOYMENT.md) for server-only provider variables and
+[DATA_READINESS.md](DATA_READINESS.md) for verified dataset coverage and training limitations.
+The Experimental Lab opens on three task cards and uses five steps. Actual backend
+training stages are reported through local training jobs; no progress metrics are simulated.
+The standalone DNN predictor navigation was removed; protected weights and reusable code remain.
