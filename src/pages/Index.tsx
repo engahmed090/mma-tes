@@ -1,176 +1,175 @@
-import ExperimentalLab from '@/components/experimental/ExperimentalLab';
-import { streamlitBase } from '@/lib/serviceConfig';
-import React, { useState } from 'react';
-import { useShapeData } from '@/hooks/useShapeData';
-import FindBestTab from '@/components/absorber/FindBestTab';
-import InverseDesignTab from '@/components/absorber/InverseDesignTab';
-import BioSensingTab from '@/components/absorber/BioSensingTab';
-import ChatTab from '@/components/absorber/ChatTab';
-import ExportTab from '@/components/absorber/ExportTab';
-import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2, Cpu, MonitorPlay, BrainCircuit } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { useState } from "react";
+import {
+  Activity,
+  Search,
+  RefreshCw,
+  Bot,
+  Download,
+  Settings,
+  FlaskConical,
+  LayoutDashboard,
+} from "lucide-react";
+import { useShapeData } from "@/hooks/useShapeData";
+import { streamlitBase } from "@/lib/serviceConfig";
+import ExperimentalLab from "@/components/experimental/ExperimentalLab";
+import ResearchOverview from "@/components/research/ResearchOverview";
+import FindBestTab from "@/components/absorber/FindBestTab";
+import InverseDesignTab from "@/components/absorber/InverseDesignTab";
+import BioSensingTab from "@/components/absorber/BioSensingTab";
+import ChatTab from "@/components/absorber/ChatTab";
+import ExportTab from "@/components/absorber/ExportTab";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const TABS = [
-  { id: 'experimental', label: 'Experimental Sensing Lab', icon: Cpu },
-  { id: 'find', label: '🔍 Find Best Absorber', icon: Search },
-  { id: 'inverse', label: '🔄 Inverse Design', icon: RefreshCw },
-  { id: 'bio', label: 'Analytical Sensing', icon: HeartPulse },
-  { id: 'chat', label: '🤖 AI Expert Chat', icon: Bot },
-  { id: 'report', label: '📦 Export / Download', icon: Download },
+  { id: "overview", label: "Overview & devices", icon: LayoutDashboard },
+  { id: "experimental", label: "Experimental Sensing Lab", icon: FlaskConical },
+  { id: "find", label: "CST explorer", icon: Search },
+  { id: "bio", label: "Analytical sensing", icon: Activity },
+  { id: "inverse", label: "Inverse design", icon: RefreshCw },
+  { id: "report", label: "Export & reports", icon: Download },
+  { id: "chat", label: "AI research assistant", icon: Bot },
 ];
 
-const BIO_SUB_TABS = [
-  { id: 'controls', label: '🔬 Hardware Controls', icon: Cpu },
-  { id: 'streamlit', label: '📡 Live Streamlit Twin', icon: MonitorPlay },
-];
-
-const Index = () => {
-  const [activeTab, setActiveTab] = useState('experimental');
-  const [bioSubTab, setBioSubTab] = useState('controls');
+export default function Index() {
+  const [activeTab, setActiveTab] = useState("overview");
   const [thrDb, setThrDb] = useState(-10);
   const [includePaper, setIncludePaper] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const { shapes, loading, errors, pickAllInFreq, pickAllInRange } = useShapeData(includePaper);
-
+  const [configOpen, setConfigOpen] = useState(false);
+  const { shapes, loading, errors, pickAllInFreq, pickAllInRange } =
+    useShapeData(includePaper);
+  const needsData = ["find", "inverse", "report"].includes(activeTab);
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="mx-4 mt-4 rounded-xl p-6 border border-primary/30" style={{ background: 'var(--gradient-header)' }}>
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-foreground">
-              🧲 Metamaterial Absorber AI Platform <span className="text-sm font-normal text-primary">v5</span>
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              CST simulation explorer · analytical demonstrations · model availability checked per request
-            </p>
-            <p className="text-xs text-muted-foreground">CST results are simulated, not measured. Absorption assumes negligible transmission; bandwidth uses contiguous sampled bands. No clinical validation is claimed.</p>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              <span className="badge badge-blue">Forward: (Freq,P)→S11</span>
-              <span className="badge badge-green">Inverse: (Freq,S11)→P</span>
-              <span className="badge badge-amber">No synthetic fallback for unavailable models</span>
-              <span className="badge badge-purple">Blood Sensing: εr∈{'{1,60,68}'}</span>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Settings className="w-4 h-4 mr-1" /> Config
-          </Button>
+    <div className="platform-shell min-h-screen bg-background">
+      <header className="platform-header">
+        <div>
+          <h1>
+            MetaAbsorber <span className="text-primary">Research</span>
+          </h1>
+          <p>AI-ENHANCED METAMATERIAL SENSING PLATFORM</p>
         </div>
-      </div>
-
-      <div className="flex">
-        {/* Config panel */}
-        {sidebarOpen && (
-          <div className="w-72 shrink-0 p-4 border-r border-border space-y-4">
-            <h3 className="font-semibold text-foreground text-sm">⚙️ Configuration</h3>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1">S11 threshold (dB)</label>
-              <Input type="number" value={thrDb} onChange={e => setThrDb(Number(e.target.value))} step={0.5} className="font-mono text-sm" />
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox checked={includePaper} onCheckedChange={(v) => setIncludePaper(!!v)} id="paper" />
-              <label htmlFor="paper" className="text-sm text-muted-foreground">Include SYNTHETIC / DEMONSTRATION DATA in searches</label>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {loading ? 'Loading...' : `${shapes.length} shapes loaded`}
-              {errors.length > 0 && <div className="text-warn mt-1">{errors.length} warnings</div>}
-            </div>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={configOpen}
+          aria-controls="research-settings"
+          onClick={() => setConfigOpen(!configOpen)}
+        >
+          <Settings size={15} className="mr-2" />
+          Settings
+        </Button>
+      </header>
+      {configOpen && (
+        <aside id="research-settings" className="platform-config">
+          <label htmlFor="threshold">S₁₁ threshold (dB)</label>
+          <Input
+            id="threshold"
+            type="number"
+            value={thrDb}
+            onChange={(e) => setThrDb(Number(e.target.value))}
+            step={0.5}
+          />
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={includePaper}
+              onCheckedChange={(v) => setIncludePaper(v === true)}
+              id="paper"
+            />
+            <label htmlFor="paper">
+              Include SYNTHETIC / DEMONSTRATION DATA in searches
+            </label>
           </div>
+          <span>
+            {loading
+              ? "Loading CST sources…"
+              : `${shapes.length} datasets loaded`}
+            {errors.length > 0 && ` · ${errors.length} source warnings`}
+          </span>
+        </aside>
+      )}
+      <nav className="platform-nav" aria-label="Research modules">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <tab.icon size={15} />
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+      <main className="platform-content">
+        {activeTab === "overview" && (
+          <ResearchOverview navigate={setActiveTab} />
         )}
-
-        {/* Main content */}
-        <div className="flex-1 min-w-0">
-          {/* Tab navigation */}
-          <div className="border-b border-border px-4 flex gap-1 overflow-x-auto">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
-                  activeTab === tab.id
-                    ? 'border-primary text-foreground bg-secondary/30'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/20'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab content */}
-          <div className="p-4 md:p-6">
-            {activeTab === 'experimental' ? <ExperimentalLab /> : loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-primary mr-3" />
-                <span className="text-muted-foreground">Loading CST data files...</span>
-              </div>
-            ) : shapes.length === 0 ? (
-              <div className="text-center py-20">
-                <p className="text-destructive text-lg">⚠️ No shapes loaded. Check source data files; synthetic demonstrations require explicit opt-in.</p>
-              </div>
-            ) : (
-              <>
-                {activeTab === 'find' && <FindBestTab shapes={shapes} pickAllInFreq={pickAllInFreq} pickAllInRange={pickAllInRange} thrDb={thrDb} />}
-                {activeTab === 'inverse' && <InverseDesignTab shapes={shapes} thrDb={thrDb} />}
-
-                {/* ═══ 3rd tab: Bio-Sensing — permanently mounted to preserve Streamlit WebSocket ═══ */}
-                <div className={activeTab === 'bio' ? 'block w-full' : 'hidden'}>
-
-                  {/* ── Sub-tab navigation bar ── */}
-                  <div className="flex gap-2 mb-5 p-1 rounded-xl bg-secondary/40 border border-border w-fit">
-                    {BIO_SUB_TABS.map(st => (
-                      <button
-                        key={st.id}
-                        onClick={() => setBioSubTab(st.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                          bioSubTab === st.id
-                            ? 'bg-primary text-primary-foreground shadow-md'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        <st.icon className="w-4 h-4" />
-                        {st.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="w-full mt-4">
-                    {/* Sub-Tab A: Hardware Controls — original native BioSensing content */}
-                    <div className={bioSubTab === 'controls' ? 'block' : 'hidden'}>
-                      <BioSensingTab />
-                    </div>
-
-                    {/* Sub-Tab B: Live Streamlit Twin — permanently mounted in DOM, visibility toggled via CSS only */}
-                    <div
-                      className={`w-full h-[85vh] min-h-[650px] rounded-2xl overflow-hidden border border-border shadow-2xl bg-transparent ${
-                        bioSubTab === 'streamlit' ? 'block' : 'hidden'
-                      }`}
-                    >
-                      {streamlitBase ? <iframe
-                        src={`${streamlitBase}/?embed=true`}
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                        title="Meta Biosensor Live Twin"
-                        style={{ border: 'none', width: '100%', height: '100%' }}
-                        className="w-full h-full"
-                      /> : <p className="p-6">Live twin is not configured. Set VITE_STREAMLIT_URL to enable it.</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {activeTab === 'chat' && <ChatTab shapes={shapes} thrDb={thrDb} />}
-                {activeTab === 'report' && <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
-              </>
+        {activeTab === "experimental" && <ExperimentalLab />}
+        {activeTab === "chat" && <ChatTab shapes={shapes} thrDb={thrDb} />}
+        {activeTab === "bio" && (
+          <>
+            <p className="platform-note">
+              Analytical reference cases · Lorentzian sensing model · Blood
+              Sensing: εr∈{"{1,60,68}"}. These are illustrative permittivity
+              cases, not measured diagnostic outcomes.
+            </p>
+            <BioSensingTab />
+            {streamlitBase && (
+              <details className="mt-6">
+                <summary>External analytical workspace</summary>
+                <iframe
+                  src={`${streamlitBase}/?embed=true`}
+                  title="External analytical sensing workspace"
+                  className="w-full h-[700px] mt-4 border border-border rounded-xl"
+                />
+              </details>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+        {needsData &&
+          (loading ? (
+            <p role="status" className="py-12 text-muted-foreground">
+              Loading CST response data…
+            </p>
+          ) : shapes.length === 0 ? (
+            <p role="alert" className="platform-note">
+              CST sources are unavailable. Check the configured source files;
+              synthetic demonstrations remain excluded unless explicitly
+              enabled.
+            </p>
+          ) : (
+            <>
+              <p className="platform-note">
+                CST simulation data · Not measured results. Absorption assumes
+                negligible transmission; bandwidth uses contiguous sampled
+                bands. Geometry and model availability must be verified before
+                research use.
+              </p>
+              {activeTab === "find" && (
+                <FindBestTab
+                  shapes={shapes}
+                  pickAllInFreq={pickAllInFreq}
+                  pickAllInRange={pickAllInRange}
+                  thrDb={thrDb}
+                />
+              )}
+              {activeTab === "inverse" && (
+                <InverseDesignTab shapes={shapes} thrDb={thrDb} />
+              )}
+              {activeTab === "report" && (
+                <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />
+              )}
+            </>
+          ))}
+      </main>
+      <footer className="platform-footer">
+        <span>
+          MetaAbsorber / Research instrumentation & analytical sensing
+        </span>
+        <span>
+          Experimental validation pending · Not for clinical diagnosis
+        </span>
+      </footer>
     </div>
   );
-};
-
-export default Index;
+}
