@@ -21,6 +21,19 @@ it('uses Groq after primary failure and supports legacy keys',async()=>{
  const r=await handleChat(req(),{OPENROUTER_API_KEY:'a',OPENROUTER_MODEL:'test',GROQ_API_KEY_1:'b',GROQ_MODEL:'groq-test'},fetcher);
  expect(r.headers.get('X-AI-Provider')).toBe('groq');expect(await r.text()).toContain('Fallback provider text');
 });
+it('uses Groq as standalone provider with openai/gpt-oss-120b and streams CST responses',async()=>{
+ const fetcher=vi.fn().mockResolvedValueOnce(catalog('openai/gpt-oss-120b')).mockResolvedValueOnce(stream('Unit cell boundary setup guide'));
+ const r=await handleChat(req({brain:'cst',messages:[{role:'user',content:'How to set up unit cell boundaries in CST for an absorber?'}]}),{GROQ_API_KEY:'test-groq-key',GROQ_MODEL:'openai/gpt-oss-120b'},fetcher);
+ expect(r.status).toBe(200);expect(r.headers.get('X-AI-Provider')).toBe('groq');expect(r.headers.get('X-AI-Model')).toBe('openai/gpt-oss-120b');
+ expect(await r.text()).toContain('Unit cell boundary setup guide');
+ expect(fetcher.mock.calls[0][0]).toBe('https://api.groq.com/openai/v1/models');
+ expect(fetcher.mock.calls[0][1].headers.Authorization).toBe('Bearer test-groq-key');
+ expect(fetcher.mock.calls[1][0]).toBe('https://api.groq.com/openai/v1/chat/completions');
+ const payload=JSON.parse(fetcher.mock.calls[1][1].body);
+ expect(payload.model).toBe('openai/gpt-oss-120b');
+ expect(payload.messages[0].content).toContain('You assist with CST absorber data');
+ expect(payload.messages.at(-1).content).toBe('How to set up unit cell boundaries in CST for an absorber?');
+});
 it('returns explicit unavailable without configured secrets or fabricated responses',async()=>{
  const fetcher=vi.fn();const r=await handleChat(req(),{},fetcher);
  expect(r.status).toBe(503);expect((await r.json()).error).toContain('server environment');expect(fetcher).not.toHaveBeenCalled();
