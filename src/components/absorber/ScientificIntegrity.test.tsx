@@ -8,12 +8,11 @@ import BioSensingTab from './BioSensingTab';
 import AutoDesignCard from './AutoDesignCard';
 import { analyticalS11Curve, DNN_METRICS, KPIS, SENSITIVITY_TABLE } from '@/data/bloodSensingData';
 afterEach(cleanup);
-it('identifies analytical curves and makes unsupported metrics unavailable', () => {
+it('keeps scientific data safeguards and removes analytical panels from hardware tab', () => {
   render(<BioSensingTab />);
-  expect(screen.getByRole('heading', { name: /Analytical Sensing Model/ })).toBeTruthy();
-  expect(screen.queryByText(/Virtual AI Laboratory/)).toBeNull();
-  expect(screen.getByText(/Not a neural-network prediction/)).toBeTruthy();
-  expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+  expect(screen.queryByText(/Analytical Sensing Model|Manual VNA Input|Sensitivity/)).toBeNull();
+  expect(screen.getByText(/Scripted animation, not measured results/)).toBeTruthy();
+  expect(screen.getByText(/Classification accuracy .* Unavailable/)).toBeTruthy();
   expect(DNN_METRICS.status).toBe('unavailable');
   expect(KPIS.status).toBe('unavailable');
   expect(SENSITIVITY_TABLE.every(r => r.fr_ghz === null && r.sensitivity === 'Unavailable')).toBe(true);

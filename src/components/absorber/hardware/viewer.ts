@@ -3,7 +3,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-export type Sample = "Healthy" | "Research";
+import { demoState, DURATION, type Sample } from "./demo";
+export type { Sample } from "./demo";
 export type View =
   | "Overview"
   | "Screen"
@@ -22,7 +23,6 @@ export type Viewer = {
   play(): void;
   reset(): void;
   sample(value: Sample): void;
-  language(value: string): void;
   open(value: boolean): void;
   view(value: View): void;
   dispose(): void;
@@ -49,23 +49,6 @@ function loadBytes(url: string) {
   return bytes;
 }
 
-export function stageAt(t: number) {
-  return t < 1
-    ? "Ready"
-    : t < 2.5
-      ? "Reference calibration"
-      : t < 4
-        ? "Sample inserted"
-        : t < 6
-          ? "RF scan"
-          : t < 7.5
-            ? "S11 response update"
-            : t < 9
-              ? "AI-assisted analysis"
-              : t < 13
-                ? "AI-assisted result"
-                : "Reset";
-}
 function clipTime(t: number) {
   if (t < 2.5) return 0;
   if (t < 4) return 1.5 + (t - 2.5);
@@ -208,8 +191,7 @@ export async function createViewer(
   let time = 0,
     playing = false,
     opened = false,
-    sample: Sample = "Research",
-    language = "EN",
+    sample: Sample = "Reference",
     screen = "Ready";
   let dirty = true,
     moving = false,
@@ -220,17 +202,58 @@ export async function createViewer(
     lastRender = 0,
     lastReport = 0;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Replace only runtime display artwork. Original GLB bytes and geometry stay intact.
+  const displayCanvas = document.createElement("canvas");
+  displayCanvas.width = 1024; displayCanvas.height = 512;
+  const displayContext = displayCanvas.getContext("2d");
+  const displayTexture = new THREE.CanvasTexture(displayCanvas);
+  displayTexture.colorSpace = THREE.SRGBColorSpace;
+  displayTexture.flipY = false;
+  const displayMaterial = new THREE.MeshBasicMaterial({ map: displayTexture });
+  const retiredMaterials = new Set<THREE.Material>();
+  screens.Ready?.traverse((node) => {
+    if (node instanceof THREE.Mesh) {
+      (Array.isArray(node.material) ? node.material : [node.material]).forEach(m => retiredMaterials.add(m));
+      node.material = displayMaterial;
+    }
+  });
+  const cradle = gltf.scene.getObjectByName("Mini sample | detachable loading cradle [web snapshot]");
+  const cradlePosition = cradle?.position.clone();
+  const pulse = new THREE.PointLight(0x22d3ee, 0, 0.6, 2);
+  pulse.position.set(0.06, 0.13, 0.06); scene.add(pulse);
+  let lastScreen = "";
   function updateScreen() {
-    screen =
-      time < 4 || time >= 13
-        ? "Ready"
-        : time < 7.5
-          ? "Scanning"
-          : time < 9
-            ? "AI"
-            : sample + (language === "KU" ? "_KU" : "");
+    const state = demoState(time, portable, sample);
+    screen = state.screen;
     Object.values(screens).forEach((o) => o.scale.setScalar(0));
-    screens[screen]?.scale.setScalar(1);
+    screens.Ready?.scale.setScalar(1);
+    if (screen === lastScreen || !displayContext) return;
+    lastScreen = screen;
+    const c = displayContext;
+    c.fillStyle = "#071421"; c.fillRect(0, 0, 1024, 512);
+    c.fillStyle = "#67e8f9"; c.font = "bold 36px sans-serif";
+    c.fillText("mma-test / RESEARCH DEMO", 40, 70);
+    c.fillStyle = "#ffffff"; c.font = "32px sans-serif";
+    const words = screen.split(" "); let line = "", y = 175;
+    for (const word of words) {
+      if (c.measureText(line + word).width > 930) { c.fillText(line, 40, y); line = ""; y += 48; }
+      line += word + " ";
+    }
+    c.fillText(line, 40, y);
+    c.fillStyle = "#94a3b8"; c.font = "26px sans-serif";
+    c.fillText("ILLUSTRATIVE / NOT A MEASUREMENT", 40, 395);
+    c.fillText("No diagnostic or concentration result", 40, 445);
+    displayTexture.needsUpdate = true;
+  }
+  let cameraStage = -1;
+  function guideCamera() {
+    const step = demoState(time, portable, sample).step;
+    if (step === cameraStage) return;
+    cameraStage = step;
+    const pose = opened && !portable ? [[0.4, 0.34, 0.45], [0.035, 0.12, 0]] : step === 0 ? positions.Overview
+      : portable ? [[0.24, 0.24, 0.28], [0, 0.07, 0]]
+      : step === 1 ? positions.Cartridge : [[0.4, 0.34, 0.45], [0.035, 0.12, 0]];
+    desiredPosition.fromArray(pose[0]); desiredTarget.fromArray(pose[1]); moving = true;
   }
   function report() {
     host.dataset.screen = screen;
@@ -242,7 +265,7 @@ export async function createViewer(
     onState({
       time,
       playing,
-      stage: stageAt(time),
+      stage: demoState(time, portable, sample).stage,
       screen,
       cartridge:
         gltf.scene.getObjectByName("Sample_Cartridge")?.position.x || 0,
@@ -257,6 +280,9 @@ export async function createViewer(
     desiredTarget.copy(controls.target);
     moving = false;
     time = 0;
+    cameraStage = -1;
+    if (cradle && cradlePosition) cradle.position.copy(cradlePosition);
+    pulse.intensity = 0;
     playing = false;
     opened = false;
     mixer.setTime(0);
@@ -304,12 +330,18 @@ export async function createViewer(
     raf = requestAnimationFrame(frame);
     const dt = Math.min((now - last) / 1000, 0.06);
     last = now;
-    if (document.hidden) return;
+    if (document.hidden || !visible) return;
     if (playing) {
       time += dt;
-      if (time >= 15) reset();
+      if (time >= DURATION) reset();
       else {
-        mixer.setTime(clipTime(time));
+        mixer.setTime(clipTime(time * 0.75));
+        guideCamera();
+        if (cradle && cradlePosition) {
+          cradle.position.copy(cradlePosition);
+          cradle.position.z += (time >= 2 && time < 5 ? Math.sin((time - 2) / 3 * Math.PI) * 0.018 / gltf.scene.scale.x : 0);
+        }
+        pulse.intensity = time >= 5 && time < 10 ? 0.015 + Math.sin(time * 5) * 0.008 : time >= 14 && time < 18 ? 0.01 : 0;
         updateScreen();
         dirty = true;
       }
@@ -327,7 +359,7 @@ export async function createViewer(
       if (camera.position.distanceTo(desiredPosition) < 0.0001) moving = false;
     }
     if (shell) {
-      const target = shellY + (opened || (time >= 4 && time < 13) ? 0.11 : 0);
+      const target = shellY + (opened || (time >= 5 && time < 18) ? 0.11 : 0);
       if (Math.abs(shell.position.y - target) > 0.00001) {
         shell.position.y = THREE.MathUtils.lerp(
           shell.position.y,
@@ -357,12 +389,6 @@ export async function createViewer(
       dirty = true;
       report();
     },
-    language(value) {
-      language = value;
-      updateScreen();
-      dirty = true;
-      report();
-    },
     open(value) {
       opened = value;
       desiredPosition.fromArray(
@@ -388,6 +414,12 @@ export async function createViewer(
       mixer.stopAllAction();
       mixer.uncacheRoot(gltf.scene);
       disposeModel();
+      retiredMaterials.forEach(m => {
+        Object.values(m).forEach(v => { if (v instanceof THREE.Texture) v.dispose(); });
+        m.dispose();
+      });
+      displayMaterial.dispose();
+      displayTexture.dispose();
       environment.dispose();
       renderer.domElement.removeEventListener("webglcontextlost", contextLost);
       renderer.dispose();

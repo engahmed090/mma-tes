@@ -1,7 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({
   reset: vi.fn(),
+  sample: vi.fn(),
+  play: vi.fn(),
   open: vi.fn(),
   dispose: vi.fn(),
   create: vi.fn(),
@@ -17,12 +19,12 @@ it("loads only on request, reuses enclosure/reset, switches and cleans up models
   expect(fake.create).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Explore 3D" }));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Reset view" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled(),
   );
   expect(fake.create.mock.calls[0][5]).toBe(false);
   fireEvent.click(screen.getByLabelText("Open enclosure"));
   expect(fake.open).toHaveBeenCalledWith(true);
-  fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
+  fireEvent.click(screen.getByRole("button", { name: "Reset" }));
   expect(fake.reset).toHaveBeenCalledOnce();
   fireEvent.click(
     screen.getByRole("button", { name: "Portable nitrate sensor" }),
@@ -44,6 +46,29 @@ it("reports load failure without a substitute and permits retry", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("3D unavailable");
   fireEvent.click(screen.getByRole("button", { name: "Retry 3D" }));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Reset view" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled(),
   );
+});
+
+it("wires play, pause, samples and illustrative result states without scientific metrics", async () => {
+  render(<HardwareViewer />);
+  fireEvent.change(screen.getByLabelText("Research demonstration sample"), { target: { value: "Healthy" } });
+  fireEvent.click(screen.getByRole("button", { name: "Explore 3D" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Play Demo" })).toBeEnabled());
+  expect(fake.sample).toHaveBeenCalledWith("Healthy");
+  fireEvent.click(screen.getByRole("button", { name: "Play Demo" }));
+  expect(fake.play).toHaveBeenCalledOnce();
+  act(() => fake.create.mock.calls[0][3]({ time: 16, playing: true, stage: "Research result display", screen: "demo", cartridge: 0 }));
+  expect(screen.getByTestId("demo-result")).toHaveTextContent("Illustrative pattern: Normal-blood research pattern");
+  fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+  expect(fake.play).toHaveBeenCalledTimes(2);
+  fireEvent.change(screen.getByLabelText("Research demonstration sample"), { target: { value: "Research" } });
+  expect(fake.sample).toHaveBeenLastCalledWith("Research");
+  expect(screen.getByTestId("demo-result")).toHaveTextContent("Cancer-related research pattern");
+  fireEvent.click(screen.getByRole("button", { name: "Portable nitrate sensor" }));
+  await waitFor(() => expect(fake.create).toHaveBeenCalledTimes(2));
+  act(() => fake.create.mock.calls[1][3]({ time: 16, playing: true, stage: "Nitrate screening demonstration", screen: "demo", cartridge: 0 }));
+  expect(screen.getByTestId("demo-result")).toHaveTextContent("Illustrative nitrate workflow complete");
+  expect(screen.queryByLabelText("Research demonstration sample")).toBeNull();
+  expect(screen.getByText("Nitrate concentration / reference range: Unavailable")).toBeTruthy();
 });

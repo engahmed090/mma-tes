@@ -1,5 +1,4 @@
 import ExperimentalLab from '@/components/experimental/ExperimentalLab';
-import { streamlitBase } from '@/lib/serviceConfig';
 import React, { useState } from 'react';
 import { useShapeData } from '@/hooks/useShapeData';
 import FindBestTab from '@/components/absorber/FindBestTab';
@@ -7,7 +6,7 @@ import InverseDesignTab from '@/components/absorber/InverseDesignTab';
 import BioSensingTab from '@/components/absorber/BioSensingTab';
 import ChatTab from '@/components/absorber/ChatTab';
 import ExportTab from '@/components/absorber/ExportTab';
-import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2, Cpu, MonitorPlay, BrainCircuit } from 'lucide-react';
+import { Search, RefreshCw, HeartPulse, Bot, Download, Settings, Loader2, Cpu } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -21,14 +20,8 @@ const TABS = [
   { id: 'report', label: '📦 Export / Download', icon: Download },
 ];
 
-const BIO_SUB_TABS = [
-  { id: 'controls', label: '🔬 Hardware Controls', icon: Cpu },
-  { id: 'streamlit', label: '📡 Live Streamlit Twin', icon: MonitorPlay },
-];
-
 const Index = () => {
   const [activeTab, setActiveTab] = useState('experimental');
-  const [bioSubTab, setBioSubTab] = useState('controls');
   const [thrDb, setThrDb] = useState(-10);
   const [includePaper, setIncludePaper] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -116,51 +109,7 @@ const Index = () => {
                 {activeTab === 'find' && <FindBestTab shapes={shapes} pickAllInFreq={pickAllInFreq} pickAllInRange={pickAllInRange} thrDb={thrDb} />}
                 {activeTab === 'inverse' && <InverseDesignTab shapes={shapes} thrDb={thrDb} />}
 
-                {/* ═══ 3rd tab: Bio-Sensing — permanently mounted to preserve Streamlit WebSocket ═══ */}
-                <div className={activeTab === 'bio' ? 'block w-full' : 'hidden'}>
-
-                  {/* ── Sub-tab navigation bar ── */}
-                  <div className="flex gap-2 mb-5 p-1 rounded-xl bg-secondary/40 border border-border w-fit">
-                    {BIO_SUB_TABS.map(st => (
-                      <button
-                        key={st.id}
-                        onClick={() => setBioSubTab(st.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                          bioSubTab === st.id
-                            ? 'bg-primary text-primary-foreground shadow-md'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        <st.icon className="w-4 h-4" />
-                        {st.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="w-full mt-4">
-                    {/* Sub-Tab A: Hardware Controls — original native BioSensing content */}
-                    <div className={bioSubTab === 'controls' ? 'block' : 'hidden'}>
-                      <BioSensingTab />
-                    </div>
-
-                    {/* Sub-Tab B: Live Streamlit Twin — permanently mounted in DOM, visibility toggled via CSS only */}
-                    <div
-                      className={`w-full h-[85vh] min-h-[650px] rounded-2xl overflow-hidden border border-border shadow-2xl bg-transparent ${
-                        bioSubTab === 'streamlit' ? 'block' : 'hidden'
-                      }`}
-                    >
-                      {streamlitBase ? <iframe
-                        src={`${streamlitBase}/?embed=true`}
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                        title="Meta Biosensor Live Twin"
-                        style={{ border: 'none', width: '100%', height: '100%' }}
-                        className="w-full h-full"
-                      /> : <p className="p-6">Live twin is not configured. Set VITE_STREAMLIT_URL to enable it.</p>}
-                    </div>
-                  </div>
-                </div>
+                {activeTab === 'bio' && <BioSensingTab />}
 
                 {activeTab === 'chat' && <ChatTab shapes={shapes} thrDb={thrDb} />}
                 {activeTab === 'report' && <ExportTab shapes={shapes} pickAllInFreq={pickAllInFreq} />}
