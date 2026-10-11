@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Box, Radio, ChevronRight, ShieldCheck } from "lucide-react";
+import { Play, Pause, RotateCcw, Radio, ChevronRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { demoState, DURATION, PIPELINE, SAMPLE_LABELS, type Sample } from "./demo";
 import type { Snapshot, Viewer } from "./viewer";
@@ -8,16 +8,15 @@ const INITIAL: Snapshot = { time: 0, playing: false, stage: "System ready", scre
 export default function HardwareViewer() {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer | null>(null);
-  const [requested, setRequested] = useState(false);
   const [portable, setPortable] = useState(false);
-  const [status, setStatus] = useState<"standby" | "loading" | "ready" | "error">("standby");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
   const [opened, setOpened] = useState(false);
   const [sample, setSample] = useState<Sample>("Reference");
   const preference = useRef<Sample>("Reference");
   const [state, setState] = useState(INITIAL);
   useEffect(() => {
-    if (!requested || !host.current) return;
+    if (!host.current) return;
     const controller = new AbortController();
     const target = host.current;
     let instance: Viewer | null = null;
@@ -36,13 +35,13 @@ export default function HardwareViewer() {
         result.sample(preference.current); setStatus("ready");
       }).catch(fail);
     return () => { controller.abort(); instance?.dispose(); viewer.current = null; };
-  }, [requested, portable, attempt]);
+  }, [portable, attempt]);
   const current = demoState(state.time, portable, sample);
   const demoOpen = !portable && state.time >= 5 && state.time < 18;
   function reset() { viewer.current?.reset(); setOpened(false); }
   function chooseDevice(value: boolean) {
     if (portable === value) return;
-    setPortable(value); setStatus(requested ? "loading" : "standby"); setState(INITIAL); setOpened(false);
+    setPortable(value); setStatus("loading"); setState(INITIAL); setOpened(false);
   }
   return (
     <section aria-label="mma-test research hardware" className="space-y-4 min-w-0">
@@ -61,11 +60,10 @@ export default function HardwareViewer() {
         <div className="min-w-0 rounded-xl border border-border overflow-hidden bg-secondary/10">
           <div className="flex justify-between gap-2 px-4 py-3 border-b border-border text-[10px] font-mono tracking-wider">
             <span className="text-primary">{portable ? "PORTABLE / R04" : "MAIN SYSTEM / R04"}</span>
-            <span>{status === "ready" ? "● 3D READY" : status === "error" ? "3D UNAVAILABLE" : status === "loading" ? "LOADING ASSET" : "STANDBY"}</span>
+            <span>{status === "ready" ? "● 3D READY" : status === "error" ? "3D UNAVAILABLE" : "LOADING ASSET"}</span>
           </div>
           <div ref={host} data-testid="hardware-viewport" className="relative w-full h-[340px] sm:h-[460px] xl:h-[520px] overflow-hidden [&>canvas]:relative [&>canvas]:block [&>canvas]:max-w-full" style={{ background: "radial-gradient(ellipse at 50% 80%, rgba(34,211,238,0.07), transparent 55%)" }}>
-            {!requested && <div className="absolute inset-0 flex flex-col gap-4 items-center justify-center"><Box className="w-10 h-10 text-primary/60" /><Button onClick={() => setRequested(true)}>Explore 3D</Button><span className="text-xs text-muted-foreground">Load the original R04 hardware asset</span></div>}
-            {status === "loading" && <p role="status" className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">Loading exact R04 hardware model…</p>}
+            {status === "loading" && <p role="status" className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">Loading research hardware…</p>}
             {status === "error" && <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm p-6 text-center"><p>3D unavailable. Check WebGL support and the model download.</p><Button onClick={() => setAttempt(n => n + 1)}>Retry 3D</Button></div>}
           </div>
           <div className="px-4 pb-3 flex justify-between flex-wrap gap-2 text-[10px] text-muted-foreground font-mono"><span>DRAG / ORBIT · SCROLL / PINCH TO ZOOM</span><span>ILLUSTRATIVE / RESEARCH DEMONSTRATION</span></div>

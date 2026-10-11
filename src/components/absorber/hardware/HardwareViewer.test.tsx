@@ -14,14 +14,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   fake.create.mockResolvedValue(fake);
 });
-it("loads only on request, reuses enclosure/reset, switches and cleans up models", async () => {
+it("auto-loads main on mount, reuses enclosure/reset, switches and cleans up models", async () => {
   const { unmount } = render(<HardwareViewer />);
-  expect(fake.create).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Explore 3D" }));
+  expect(screen.queryByRole("button", { name: "Explore 3D" })).toBeNull();
+  expect(screen.queryByText("Load the original R04 hardware asset")).toBeNull();
+  expect(screen.getByRole("status")).toHaveTextContent("Loading research hardware");
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled(),
   );
   expect(fake.create.mock.calls[0][5]).toBe(false);
+  expect(screen.queryByRole("status")).toBeNull();
   fireEvent.click(screen.getByLabelText("Open enclosure"));
   expect(fake.open).toHaveBeenCalledWith(true);
   fireEvent.click(screen.getByRole("button", { name: "Reset" }));
@@ -42,7 +44,6 @@ it("loads only on request, reuses enclosure/reset, switches and cleans up models
 it("reports load failure without a substitute and permits retry", async () => {
   fake.create.mockRejectedValueOnce(new Error("download failed"));
   render(<HardwareViewer />);
-  fireEvent.click(screen.getByRole("button", { name: "Explore 3D" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("3D unavailable");
   fireEvent.click(screen.getByRole("button", { name: "Retry 3D" }));
   await waitFor(() =>
@@ -53,7 +54,6 @@ it("reports load failure without a substitute and permits retry", async () => {
 it("wires play, pause, samples and illustrative result states without scientific metrics", async () => {
   render(<HardwareViewer />);
   fireEvent.change(screen.getByLabelText("Research demonstration sample"), { target: { value: "Healthy" } });
-  fireEvent.click(screen.getByRole("button", { name: "Explore 3D" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Play Demo" })).toBeEnabled());
   expect(fake.sample).toHaveBeenCalledWith("Healthy");
   fireEvent.click(screen.getByRole("button", { name: "Play Demo" }));
