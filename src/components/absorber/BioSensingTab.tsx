@@ -7,6 +7,7 @@
  *  - 3 analytical demonstration curves: Air, Normal Blood, Cancer Blood
  *  - Manual VNA input → localStorage → plotted as scatter dots
  */
+import HardwareViewer from './hardware/HardwareViewer';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Brain, FlaskConical, Plus, Trash2, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
@@ -204,6 +205,8 @@ const BioSensingTab: React.FC = () => {
       </div>
 
       <p role="note" className="text-sm text-muted-foreground">Analytical demonstration using unverified baseline parameters. Not a neural-network prediction, measured response, or validated cancer diagnostic. Model accuracy: Unavailable. Absorption estimates assume zero transmission.</p>
+      <HardwareViewer />
+
       {/* ── S11 Chart: 1–5 GHz, 3 curves ──────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-secondary/10 p-4">
         <h3 className="text-sm font-semibold text-foreground mb-4">

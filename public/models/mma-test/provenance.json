@@ -1,0 +1,16 @@
+{
+  "main": {
+    "source": "portfolio/public/models/mma-test/mma-test_R04_Interactive.glb",
+    "sha256": "aa312a9ef066e298e98e7301ce045b5e8b5bb4a1a4fdd3c776961d6b0d58b156",
+    "copy": "byte-for-byte"
+  },
+  "portable": {
+    "source": "mma-test/engineering-r04/mma-test_Research_Family_R04.blend",
+    "source_sha256": "62fe0b27804b901c62c2ceddc1374c390f8716474c823bce72d7081ddba34c05",
+    "assembly": "JUICE | handheld product assembly",
+    "frame": 1,
+    "sha256": "99b1eb33ba04d8e0413cca5d7107a2277f1cbfe72fdcb1acba963ddd553b9450",
+    "export": "Evaluated visible original meshes, curves and text; root translation removed. No remodeled geometry. glTF material conversion; procedural Blender finishes may differ."
+  },
+  "scientific_status": "Hardware visualization only. No measurements, clinical validation or performance claims."
+}
