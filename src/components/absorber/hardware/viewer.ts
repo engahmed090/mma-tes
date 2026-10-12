@@ -3,7 +3,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-import { demoState, DURATION, type Sample } from "./demo";
+import { demoState, DURATION, advanceDemo, type Sample } from "./demo";
+import { createSampleRig } from "./sampleRig";
 export type { Sample } from "./demo";
 export type View =
   | "Overview"
@@ -50,12 +51,8 @@ function loadBytes(url: string) {
 }
 
 function clipTime(t: number) {
-  if (t < 2.5) return 0;
-  if (t < 4) return 1.5 + (t - 2.5);
-  if (t < 7.5) return 3 + ((t - 4) / 3.5) * 2;
-  if (t < 9) return 5 + (t - 7.5);
-  if (t < 13) return 6.5 + ((t - 9) / 4) * 3.5;
-  return 10 + (t - 13);
+  // Preserve the original clip's loading motion, then hold its sensing pose.
+  return t < 2 ? 0 : t < 5 ? 1.5 + (t - 2) * .5 : 3;
 }
 
 export async function createViewer(
@@ -181,6 +178,7 @@ export async function createViewer(
   gltf.scene.traverse((o) => {
     if (o.name.startsWith("Screen_")) screens[o.name.slice(7)] = o;
   });
+  const sampleRig = createSampleRig(gltf.scene, scene, portable);
   const mixer = new THREE.AnimationMixer(gltf.scene);
   if (gltf.animations[0]) {
     const action = mixer.clipAction(gltf.animations[0]);
@@ -191,7 +189,7 @@ export async function createViewer(
   let time = 0,
     playing = false,
     opened = false,
-    sample: Sample = "Reference",
+    sample: Sample = portable ? "JuiceReference" : "Reference",
     screen = "Ready";
   let dirty = true,
     moving = false,
@@ -217,6 +215,19 @@ export async function createViewer(
       node.material = displayMaterial;
     }
   });
+  if (portable) {
+    const optical = gltf.scene.getObjectByName("Mini | optical screen [web snapshot]");
+    if (optical instanceof THREE.Mesh) {
+      optical.geometry.computeBoundingBox();
+      const bounds = optical.geometry.boundingBox!;
+      const size = bounds.getSize(new THREE.Vector3());
+      const overlay = new THREE.Mesh(new THREE.PlaneGeometry(size.x * .98, size.z * .98), displayMaterial);
+      overlay.rotation.x = -Math.PI / 2;
+      overlay.position.y = bounds.max.y + .003;
+      optical.add(overlay);
+    }
+    gltf.scene.traverse(node => { if (node.name.startsWith("R03 MINI UI |")) node.visible = false; });
+  }
   const cradle = gltf.scene.getObjectByName("Mini sample | detachable loading cradle [web snapshot]");
   const cradlePosition = cradle?.position.clone();
   const pulse = new THREE.PointLight(0x22d3ee, 0, 0.6, 2);
@@ -250,7 +261,7 @@ export async function createViewer(
     const step = demoState(time, portable, sample).step;
     if (step === cameraStage) return;
     cameraStage = step;
-    const pose = opened && !portable ? [[0.4, 0.34, 0.45], [0.035, 0.12, 0]] : step === 0 ? positions.Overview
+    const pose = opened ? [[0.4, 0.34, 0.45], [0.035, 0.12, 0]] : step === 0 ? positions.Overview
       : portable ? [[0.24, 0.24, 0.28], [0, 0.07, 0]]
       : step === 1 ? positions.Cartridge : [[0.4, 0.34, 0.45], [0.035, 0.12, 0]];
     desiredPosition.fromArray(pose[0]); desiredTarget.fromArray(pose[1]); moving = true;
@@ -283,6 +294,8 @@ export async function createViewer(
     cameraStage = -1;
     if (cradle && cradlePosition) cradle.position.copy(cradlePosition);
     pulse.intensity = 0;
+    sampleRig.reset();
+    if (shell) shell.position.y = shellY;
     playing = false;
     opened = false;
     mixer.setTime(0);
@@ -330,21 +343,15 @@ export async function createViewer(
     raf = requestAnimationFrame(frame);
     const dt = Math.min((now - last) / 1000, 0.06);
     last = now;
-    if (document.hidden || !visible) return;
+    if (document.hidden) return;
     if (playing) {
-      time += dt;
-      if (time >= DURATION) reset();
-      else {
-        mixer.setTime(clipTime(time * 0.75));
-        guideCamera();
-        if (cradle && cradlePosition) {
-          cradle.position.copy(cradlePosition);
-          cradle.position.z += (time >= 2 && time < 5 ? Math.sin((time - 2) / 3 * Math.PI) * 0.018 / gltf.scene.scale.x : 0);
-        }
-        pulse.intensity = time >= 5 && time < 10 ? 0.015 + Math.sin(time * 5) * 0.008 : time >= 14 && time < 18 ? 0.01 : 0;
-        updateScreen();
-        dirty = true;
-      }
+      const next = advanceDemo(time, dt);
+      time = next.time; playing = next.playing;
+      mixer.setTime(clipTime(time));
+      guideCamera();
+      pulse.intensity = time >= 5 && time < 12 ? 0.015 + Math.sin(time * 5) * 0.008 : time >= 15 ? .01 : 0;
+      updateScreen(); dirty = true;
+      if (!playing) report();
     }
     if (playing && now - lastReport > 150) {
       report();
@@ -358,8 +365,10 @@ export async function createViewer(
       dirty = true;
       if (camera.position.distanceTo(desiredPosition) < 0.0001) moving = false;
     }
+    if (sampleRig.update(time, sample, opened, dt)) dirty = true;
+    if (opened || time > 0) dirty = true;
     if (shell) {
-      const target = shellY + (opened || (time >= 5 && time < 18) ? 0.11 : 0);
+      const target = shellY + (opened || (time >= 5) ? 0.11 : 0);
       if (Math.abs(shell.position.y - target) > 0.00001) {
         shell.position.y = THREE.MathUtils.lerp(
           shell.position.y,
@@ -378,6 +387,7 @@ export async function createViewer(
   }
   const viewer: Viewer = {
     play() {
+      if (time >= DURATION) return;
       playing = !playing;
       dirty = true;
       report();
@@ -385,6 +395,7 @@ export async function createViewer(
     reset,
     sample(value) {
       sample = value;
+      reset();
       updateScreen();
       dirty = true;
       report();
@@ -413,6 +424,7 @@ export async function createViewer(
       controls.dispose();
       mixer.stopAllAction();
       mixer.uncacheRoot(gltf.scene);
+      sampleRig.dispose();
       disposeModel();
       retiredMaterials.forEach(m => {
         Object.values(m).forEach(v => { if (v instanceof THREE.Texture) v.dispose(); });

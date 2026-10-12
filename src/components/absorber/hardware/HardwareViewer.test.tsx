@@ -34,7 +34,7 @@ it("auto-loads main on mount, reuses enclosure/reset, switches and cleans up mod
   await waitFor(() => expect(fake.create).toHaveBeenCalledTimes(2));
   expect(fake.create.mock.calls[1][5]).toBe(true);
   expect(fake.dispose).toHaveBeenCalled();
-  expect(screen.queryByLabelText("Open enclosure")).toBeNull();
+  expect(screen.getByLabelText("Open enclosure")).toBeEnabled();
   expect(
     screen.getByText(/not measured results or diagnostic evidence/),
   ).toBeTruthy();
@@ -59,16 +59,16 @@ it("wires play, pause, samples and illustrative result states without scientific
   fireEvent.click(screen.getByRole("button", { name: "Play Demo" }));
   expect(fake.play).toHaveBeenCalledOnce();
   act(() => fake.create.mock.calls[0][3]({ time: 16, playing: true, stage: "Research result display", screen: "demo", cartridge: 0 }));
-  expect(screen.getByTestId("demo-result")).toHaveTextContent("Illustrative pattern: Normal-blood research pattern");
+  expect(screen.getByTestId("demo-result")).toHaveTextContent("NORMAL-LIKE PATTERN");
   fireEvent.click(screen.getByRole("button", { name: "Pause" }));
   expect(fake.play).toHaveBeenCalledTimes(2);
   fireEvent.change(screen.getByLabelText("Research demonstration sample"), { target: { value: "Research" } });
   expect(fake.sample).toHaveBeenLastCalledWith("Research");
-  expect(screen.getByTestId("demo-result")).toHaveTextContent("Cancer-related research pattern");
+  expect(screen.getByTestId("demo-result")).toHaveTextContent("Select sample and press Play Demo");
   fireEvent.click(screen.getByRole("button", { name: "Portable nitrate sensor" }));
   await waitFor(() => expect(fake.create).toHaveBeenCalledTimes(2));
   act(() => fake.create.mock.calls[1][3]({ time: 16, playing: true, stage: "Nitrate screening demonstration", screen: "demo", cartridge: 0 }));
-  expect(screen.getByTestId("demo-result")).toHaveTextContent("Illustrative nitrate workflow complete");
-  expect(screen.queryByLabelText("Research demonstration sample")).toBeNull();
-  expect(screen.getByText("Nitrate concentration / reference range: Unavailable")).toBeTruthy();
+  expect(screen.getByTestId("demo-result")).toHaveTextContent("WITHIN REFERENCE RANGE");
+  expect(screen.getByLabelText("Research demonstration sample")).toHaveValue("JuiceReference");
+  expect(screen.getByText("Concentration / calibrated reference range: Unavailable")).toBeTruthy();
 });

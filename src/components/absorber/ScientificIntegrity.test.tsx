@@ -12,7 +12,7 @@ it('keeps scientific data safeguards and removes analytical panels from hardware
   render(<BioSensingTab />);
   expect(screen.queryByText(/Analytical Sensing Model|Manual VNA Input|Sensitivity/)).toBeNull();
   expect(screen.getByText(/Scripted animation, not measured results/)).toBeTruthy();
-  expect(screen.getByText(/Classification accuracy .* Unavailable/)).toBeTruthy();
+  expect(screen.getByText(/Model confidence .* diagnostic accuracy: Unavailable/)).toBeTruthy();
   expect(DNN_METRICS.status).toBe('unavailable');
   expect(KPIS.status).toBe('unavailable');
   expect(SENSITIVITY_TABLE.every(r => r.fr_ghz === null && r.sensitivity === 'Unavailable')).toBe(true);
